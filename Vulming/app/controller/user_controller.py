@@ -6,7 +6,7 @@ from ..schema.token_schema import TokenData
 from .db_controller import select_user, get_db, insert_user
 
 from ..schema.user_schema import UserRegister
-from ..model.user_model import User
+from ..services.user import User
 from ..services.database import SessionLocal
 from passlib.context import CryptContext
 
@@ -28,18 +28,18 @@ class UserController:
     def __init__(self, user: User | None = None) -> None:
         self.user = user
         self.db = SessionLocal()
-        
-    def verify_password(self, passwd) -> bool:
-        return pwd_context.verify(passwd, self.user.hashed_password)
     
     def register_user(self, user_register: UserRegister) -> str:
-        self.user = insert_user(self.db, user_register)
-        # token 过期时间
-        access_token_expires = timedelta(minutes=30)
+
+        self.user.username = user_register.username
+        self.user.password = user_register.password
+        self.user.email = user_register.email
+        
         # 创建 token
-        access_token = self.create_access_token(expires_delta=access_token_expires)
+        access_token = self.create_access_token(expires_delta=timedelta(minutes=30))
+        self.user.token = access_token
         return access_token
-    
+        
     def create_access_token(self, expires_delta: timedelta | None = None):
         data: dict = {"sub": self.user.username}
         to_encode = data.copy()
@@ -84,3 +84,6 @@ class UserController:
         if not self.verify_password(password):
             return False
         return self.user
+    
+    def verify_password(self, passwd: str) -> bool:
+        return self.user.password == passwd
