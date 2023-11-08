@@ -17,27 +17,47 @@ class UserManager:
     def __init__(self, db: Session) -> None:
         self.db = db
     
-    def get_user_by_username(self, username: str):
-        return self.db.query(User).filter(User.username == username).first()
+    def get_user_by_name(self, username: str):
+        user = self.db.query(User).filter(User.username == username).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户不存在",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return user
+    
+    def get_password_hash(self, password: str):
+        return pwd_context.hash(password)
 
     def create_user(self, username: str, password: str, email: str):
-        new_user = User(username=username, password=password, email=email)
+        existing_user = self.get_user_by_name(username)
+        if existing_user:
+            raise HTTPException(
+                status_code=400, 
+                detail="用户已存在",
+                headers={"WWW-Authenticate": "Bearer"}
+        )
+        password = self.get_password_hash(password)
+        new_user = User(id=0, username=username, password=password, email=email, role='normal', disabled=False)
         self.db.add(new_user)
         self.db.commit()
         self.db.refresh(new_user)
         
-        return self.create_access_token(new_user.username)
+        return "注册成功!"
     
-    def authenticate_user(self, username: str, password: str) -> User:
-        user = self.get_user_by_username(username)
+    def authenticate_user(self, username: str, password: str) -> str:
+        user = self.get_user_by_name(username)
         
-        if not user:
-            return False
         if not self.verify_password(password, user.password):
-            return False
-        return True
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户不存在",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return self.create_access_token(user.username)
     
-    def verify_password(plain_password, hashed_password):
+    def verify_password(self, plain_password, hashed_password):
         return pwd_context.verify(plain_password, hashed_password)
     
     def create_access_token(self, username, expires_delta: timedelta | None = timedelta(minutes=30)):
@@ -51,7 +71,6 @@ class UserManager:
         encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
         return encoded_jwt
 
-
     def get_current_user_info(self, token: str) -> dict:
         
         credentials_exception = HTTPException(
@@ -62,15 +81,15 @@ class UserManager:
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             username: str = payload.get("sub")
+            print(payload)
             if username is None:
                 raise credentials_exception
         except JWTError:
             raise credentials_exception
-        
-        user = self.get_user_by_username(username)
+        user = self.get_user_by_name(username)
         if user is None:
             raise credentials_exception
-        elif user.disabled is False:
+        elif user.disabled is True:
             raise HTTPException(status_code=400, detail="Inactive user")
-        return {"username": user.username, "email": user.email, "id": self.user.id, "role": user.role,}
+        return {"username": user.username, "email": user.email, "id": user.id, "role": user.role,}
 
