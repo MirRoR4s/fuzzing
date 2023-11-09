@@ -1,12 +1,13 @@
 # main.py
 from fastapi import FastAPI
 import uvicorn
-from controller import user_api
+from controller import user_api, fuzz_api
 from model.database import engine, Base
 
 
 app = FastAPI()
 app.include_router(user_api.router)
+app.include_router(fuzz_api.router)
 
 def main():
     

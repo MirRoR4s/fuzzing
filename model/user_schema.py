@@ -11,6 +11,8 @@ class UserRegister(UserLogin):
     email: str
 
 class UserInfo(UserBase):
+    email: str
     id: int
     role: str
+
 

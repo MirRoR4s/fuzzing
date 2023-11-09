@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
+import re
 
 # to get a string like this run:
 # openssl rand -hex 32
@@ -19,18 +20,21 @@ class UserManager:
     
     def get_user_by_name(self, username: str):
         user = self.db.query(User).filter(User.username == username).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户不存在",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
         return user
     
     def get_password_hash(self, password: str):
         return pwd_context.hash(password)
 
     def create_user(self, username: str, password: str, email: str):
+        # 用户名只能由大小写字母和数字组成
+        # 密码只能由大小写字母和数字以及
+        if not re.match('^[a-zA-Z0-9_-]{4,16}$', username):
+            raise HTTPException(
+                status_code=400,
+                detail="用户名不合法，只能包含大小写字母、数字、_-等字符且长度至少为4！",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        
         existing_user = self.get_user_by_name(username)
         if existing_user:
             raise HTTPException(

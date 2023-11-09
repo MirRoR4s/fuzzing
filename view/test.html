@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Explorer</title>
+  <style>
+    .folder {
+      display: inline-block;
+      margin: 5px;
+      padding: 5px;
+      background-color: #f0f0f0;
+      border: 1px solid #ccc;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="fileExplorer">
+    <button onclick="createFolder()">新增文件夹</button>
+  </div>
+
+  <script>
+    function createFolder() {
+      var folderName = prompt("请输入文件夹名称:");
+      if (folderName) {
+        var folder = document.createElement('div');
+        folder.className = 'folder';
+        folder.textContent = folderName;
+        folder.onclick = function() {
+          createFile(folderName);
+        };
+        document.getElementById('fileExplorer').appendChild(folder);
+      }
+    }
+
+    function createFile(folderName) {
+      var fileName = prompt("请输入文件名称:");
+      if (fileName) {
+        var file = document.createElement('div');
+        file.textContent = fileName;
+        document.getElementById('fileExplorer').appendChild(file);
+      }
+    }
+  </script>
+</body>
+</html>
