@@ -11,11 +11,14 @@ class S7CommunicationSocketConnection(TCPSocketConnection):
     """
     重写 TCPSocketConnection 的 send 方法发送 COTP、TPKT 协议层的数据，以便专心于 S7 协议的原语定义
     """
-    
-    # def __init__(self, host, port, send_timeout=5.0, recv_timeout=5.0, server=False):
-        
-    #     super(S7CommunicationSocketConnection, self).__init__(host, port, send_timeout, recv_timeout, server)
-    
+    def __init__(self, host, port, pdu_type: str, send_timeout=5.0, recv_timeout=5.0, server=False):
+        super(TCPSocketConnection, self).__init__(send_timeout, recv_timeout)
+        self.pdu_type = pdu_type
+        self.host = host
+        self.port = port
+        self.server = server
+        self._serverSock = None
+
     def send(self, data):
         """
         send _summary_
@@ -26,6 +29,6 @@ class S7CommunicationSocketConnection(TCPSocketConnection):
         :type data: _type_
         """
         tpkt = TPKT()
-        cotp = COTP()
+        cotp = COTP(pdu_type=self.pdu_type)
         data = raw(tpkt/cotp/data)
         super().send(data)
