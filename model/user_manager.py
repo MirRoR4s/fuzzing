@@ -76,6 +76,18 @@ class UserManager:
         return encoded_jwt
 
     def get_current_user_info(self, token: str) -> dict:
+        """
+        get_current_user_info _summary_
+
+        :param token: _description_
+        :type token: str
+        :raises credentials_exception: _description_
+        :raises credentials_exception: _description_
+        :raises credentials_exception: _description_
+        :raises HTTPException: _description_
+        :return: 返回用户名、邮箱、id、角色
+        :rtype: dict
+        """
         
         credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
