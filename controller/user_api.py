@@ -23,13 +23,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login")
 def register(user_register: UserRegister, db = Depends(get_db)):
     """
     register 根据用户名、密码、邮箱完成注册。
-
-    :param user_register: _description_
-    :type user_register: UserRegister
-    :param db: _description_, defaults to Depends(get_db)
-    :type db: _type_, optional
-    :return: _description_
-    :rtype: _type_
     """
     user_manager = UserManager(db)
     user_manager.create_user(user_register.username, user_register.password, user_register.email)

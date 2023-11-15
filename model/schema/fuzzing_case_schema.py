@@ -1,12 +1,11 @@
 from pydantic import BaseModel
 
-
 class Fuzzable(BaseModel):
     name: str
-    default_value: str
+    default_value: int
     fuzzable: bool
     fuzz_values: list
-    
+
 class FuzzableBlock(Fuzzable):
     request_name: str | None = None
     children: Fuzzable | None | list[Fuzzable] = None
@@ -19,13 +18,9 @@ class Block(FuzzableBlock):
     dep_values: list[bytes] | None = None
     dep_compare: str | None = None
 
-# class Repeat(Fuzzable):
-#     block_name: str
-#     request: Request | None = None
-#     min_reps: int = 0
-#     max_reps: int = 25
-#     step: int = 1
-#     variable = None
+class Static(Fuzzable):
+    pass
+    
     
 class BitField(Fuzzable):
     width: int = 8

@@ -53,9 +53,9 @@ class UserManager:
     def authenticate_user(self, username: str, password: str) -> str:
         user = self.get_user_by_name(username)
         
-        if not self.verify_password(password, user.password):
+        if user is None or not self.verify_password(password, user.password):
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail="用户不存在",
                 headers={"WWW-Authenticate": "Bearer"},
             )
