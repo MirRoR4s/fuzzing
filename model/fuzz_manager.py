@@ -22,13 +22,7 @@ from .schema.fuzzing_case_schema import *
 class FuzzManager:
 
     """
-
-
-
     模糊测试后端
-
-
-
     """
 
     def __init__(self, db: Session):
@@ -36,28 +30,12 @@ class FuzzManager:
 
     def create_fuzzing_group(self, user_id: int, name: str, desc: str | None = None):
         """
-
-
-
         create_test_group 创建测试用例组
 
-
-
-
         :param name: 组名
-
         :type name: str
-
-
-
         :param desc: 组描述, defaults to None
-
-
-
         :type desc: str | None, optional
-
-
-
         """
 
         with Session(engine) as session:
@@ -353,25 +331,12 @@ class FuzzManager:
 
     def get_block_id(self, request_id: int) -> int:
         """
-
-
-
         get_block_id 查询数据库，获取 block id。
-
-
-
-
+        
         :param request_id: 该 block 的 request id
-
-
-
         :type request_id: int
         :return: _description_
-
         :rtype: int
-
-
-
         """
 
         ans = self.db.scalar(
