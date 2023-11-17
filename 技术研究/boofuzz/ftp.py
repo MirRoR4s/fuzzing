@@ -12,10 +12,6 @@ def main():
     session = Session(target=Target(connection=TCPSocketConnection("127.0.0.1", 21)))
     
     define_proto(session=session)
-    with open('somefile.png', 'wb') as file:
-        file.write(session.render_graph_graphviz().create_png())
-
-
     session.fuzz()
 
 
