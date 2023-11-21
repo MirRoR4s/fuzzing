@@ -1,4 +1,4 @@
-from model.test_case_gen.s7_communication.s7c_manager import S7CommunicationSession
+from model.fuzzing_case_gen.s7_communication.s7c_manager import S7CommunicationSession
 from pyfiglet import Figlet
 import rich_click as click
 

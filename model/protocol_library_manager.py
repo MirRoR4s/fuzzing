@@ -1,6 +1,6 @@
 from sqlalchemy.orm.session import Session
 from sqlalchemy import select
-from .sql_model import TestCaseGroup
+from .sql_model import FuzzTestCaseGroup
 
 
 class ProtocolLibraryManager:
@@ -25,7 +25,7 @@ class ProtocolLibraryManager:
         self.db = db
     
     def select_case_group(self, user_id: int):
-        stmt = select(TestCaseGroup).where(TestCaseGroup.user_id == user_id)
+        stmt = select(FuzzTestCaseGroup).where(FuzzTestCaseGroup.user_id == user_id)
         result = self.db.execute(stmt)
         print(result)
 
