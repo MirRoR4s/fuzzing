@@ -1,7 +1,7 @@
 """
 模糊测试 fastapi 接口
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -10,14 +10,14 @@ from model.user_manager import UserManager
 from model.fuzz_manager import FuzzManager
 from model.schema.fuzzing_case_schema import *
 
-router = APIRouter(prefix="/fuzz", tags=["模糊测试"])
+router = APIRouter(prefix="/fuzzing", tags=["模糊测试"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login")
 
 
-@router.get("/create/group", name="创建测试用例组")
+@router.get("/create/group", name="创建模糊测试用例组")
 async def create_fuzzing_group(
-        group_name: str,
-        desc: str | None = None,
+        fuzz_test_case_group: str = Query(min_length=3, max_length=15),
+        desc: str | None = Query(default=None, max_length=100),
         token: str = Depends(oauth2_scheme),
         db: Session = Depends(get_db),
 ):
@@ -28,19 +28,16 @@ async def create_fuzzing_group(
 
         group_name=test&desc=NGICS
     """
-
     user_manager = UserManager(db)
-    user_info = user_manager.get_current_user_info(token)
-    user_id = user_info.get("id")
+    user_id = user_manager.get_current_user_info(token).get("id")
     fuzz_manager = FuzzManager(db)
-    return fuzz_manager.create_fuzzing_group(user_id, group_name, desc)
+    return fuzz_manager.create_fuzz_test_group(user_id, fuzz_test_case_group, desc)
 
 
-
-@router.get("/create/fuzzing/case", name="创建模糊测试用例")
+@router.get("/create/case", name="创建模糊测试用例")
 async def create_fuzzing_case(
-        group_name: str,
-        fuzzing_case_name: str,
+        fuzz_test_case_group_name: str,
+        fuzz_test_case_name: str,
         token: str = Depends(oauth2_scheme),
         db: Session = Depends(get_db),
 ):
@@ -51,29 +48,24 @@ async def create_fuzzing_case(
         2.用例名称
     注意：同一组下用例的名称不可重复
     """
-
     user_manager = UserManager(db)
     user_info = user_manager.get_current_user_info(token)
     user_id = user_info.get("id")
     fuzz_manager = FuzzManager(db)
-
-    return fuzz_manager.create_fuzzing_case(user_id, group_name, fuzzing_case_name)
+    return fuzz_manager.create_fuzzing_case(user_id, fuzz_test_case_group_name, fuzz_test_case_name)
 
 
 @router.post("/set/block", name="设置 Block 字段")
 async def set_block(
-        fuzzing_case_group_name: str,
-        fuzzing_case_name: str,
+        fuzz_test_case_group_name: str,
+        fuzz_test_case_name: str,
         block_info: Block,
         token: str = Depends(oauth2_scheme),
         db: Session = Depends(get_db),
 ):
     user_id = UserManager(db).get_current_user_info(token).get("id")
     fuzz_manager = FuzzManager(db)
-
-    return fuzz_manager.set_block(
-        user_id, fuzzing_case_group_name, fuzzing_case_name, block_info
-    )
+    return fuzz_manager.set_block(user_id, fuzz_test_case_group_name, fuzz_test_case_name, block_info)
 
 
 @router.post("/set/static", name="设置 static 字段")
@@ -133,19 +125,17 @@ async def set_bit_field():
 
 @router.post("/set/byte", name="设置 Byte 字段")
 async def set_byte(
-        fuzzing_gourp_name: str,
-        fuzzing_case_name: str,
-        byteinfo: Byte,
+        fuzz_test_case_group_name: str,
+        fuzz_test_case_name: str,
+        byte_info: Byte,
         block_name: str | None = None,
         token: str = Depends(oauth2_scheme),
         db: Session = Depends(get_db),
 ):
     user_id = UserManager(db).get_current_user_info(token).get("id")
-
     fuzz_manager = FuzzManager(db)
-
     return fuzz_manager.set_byte(
-        user_id, fuzzing_gourp_name, fuzzing_case_name, byteinfo, block_name
+        user_id, fuzz_test_case_group_name, fuzz_test_case_name, byte_info, block_name
     )
 
 
@@ -161,13 +151,10 @@ async def set_bytes(
     """
     可表示任意长度的二进制字节串模糊测试原语。
     """
-
     user_id = UserManager(db).get_current_user_info(token).get("id")
-
     fuzz_manager = FuzzManager(db)
-
     return fuzz_manager.set_bytes(
-        user_id, fuzzing_gourp_name, fuzzing_case_name, byteinfo, block_name
+        user_id, fuzzing_gourp_name, fuzzing_case_name, bytes_info, block_name
     )
 
 

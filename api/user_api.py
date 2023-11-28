@@ -37,6 +37,14 @@ def register(user_register: UserRegister, db=Depends(get_db)):
 
 @router.post("/login", name="用户登录")
 def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db=Depends(get_db)):
+    """
+    传入用户名和密码进行登录
+
+    样例如下：
+
+        1.username=test&password=test
+
+    """
     user_manager = UserManager(db)
     return user_manager.authenticate_user(form_data.username, form_data.password)
 

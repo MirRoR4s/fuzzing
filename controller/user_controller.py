@@ -112,34 +112,24 @@ class UserManager:
 
     def get_current_user_info(self, token: str) -> dict:
         """
-        get_current_user_info _summary_
-
-        :param token: _description_
-        :type token: str
-        :raises credentials_exception: _description_
-        :raises credentials_exception: _description_
-        :raises credentials_exception: _description_
-        :raises HTTPException: _description_
         :return: 返回用户名、邮箱、id、角色
         :rtype: dict
         """
-
         credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            username: str = payload.get("sub")
-            print(payload)
+            username: str = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]).get("sub")
             if username is None:
                 raise credentials_exception
         except JWTError:
             raise credentials_exception
-        user = self.get_user_by_name(username)
-        if user is None:
-            raise credentials_exception
-        elif user.disabled is True:
-            raise HTTPException(status_code=400, detail="Inactive user")
-        return {"username": user.username, "email": user.email, "id": user.id, "role": user.role, }
+        else:
+            user = self.get_user_by_name(username)
+            if user is None:
+                raise credentials_exception
+            elif user.disabled is True:
+                raise HTTPException(status_code=401, detail="当前用户未激活")
+            return {"username": user.username, "email": user.email, "id": user.id, "role": user.role, }

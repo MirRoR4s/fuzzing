@@ -2,7 +2,7 @@
 """
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import select
+from sqlalchemy import select, insert
 from fastapi import HTTPException
 from .sql_model import *
 from .schema.fuzzing_case_schema import *
@@ -12,11 +12,16 @@ class FuzzManager:
     """
     模糊测试后端
     """
-
     def __init__(self, db: Session):
         self.db = db
 
-    def create_fuzzing_group(self, user_id: int, group_name: str, desc: str | None = None):
+    def _is_repeat_group(self, user_id: int, group_name: str) -> bool:
+        with self.db as session:
+            stmt = select(FuzzTestCaseGroup).filter(
+                FuzzTestCaseGroup.name == group_name and FuzzTestCaseGroup.user_id == user_id)
+            return True if session.scalar(stmt) is not None else False
+
+    def create_fuzz_test_group(self, user_id: int, group_name: str, desc: str | None = None):
         """
         create_fuzzing_group 根据用户的 id 创建一个名称为 name，描述为 desc 的模糊测试用例组
 
@@ -24,52 +29,40 @@ class FuzzManager:
             create_fuzzing_group(0, "test", "this is a test")
 
             创建一个用户 id 为 0，名称为 test，描述为 this is a test 的模糊测试用例组
-
-        :param user_id: 用户 id，要求大于等于零
-        :param group_name: 模糊测试用例组的名称
-        :type group_name: str
-        :param desc: 模糊测试用例组信息，默认为 None
-        :type desc: str | None, optional
         """
-        if group_name == "test":
-            raise HTTPException(status_code=422, detail="对不起，test 组仅限于系统内部使用！")
-        if len(group_name) > 20:
-            raise HTTPException(status_code=422, detail="组名过长！")
-        elif len(group_name) == 0:
-            raise HTTPException(status_code=422, detail="组名长度为零！")
         try:
             with self.db as session:
-                test_case_group = FuzzTestCaseGroup(user_id=user_id, name=group_name, desc=desc)
-                session.add(test_case_group)
+                # 处理组名重复
+                if self._is_repeat_group(user_id, group_name):
+                    raise HTTPException(status_code=422, detail="组名重复")
+                session.add(FuzzTestCaseGroup(user_id=user_id, name=group_name, desc=desc))
                 session.commit()
-            return {"message": "创建成功"}
+                return {"message": "创建成功"}
         except Exception as e:
-            print(f"Execution failed: {e}")
-            raise HTTPException(status_code=404, detail="发生异常，请检查您的输入！")
+            session.rollback()
+            print(f"Execution failed: {e.__cause__}")
+            raise HTTPException(status_code=422, detail="发生异常，请检查您的输入！")
 
-    def create_fuzzing_case(self, user_id: int, group_name: str, fuzzing_case_name: str) -> str|bool:
-
+    def create_fuzzing_case(self, user_id: int, group_name: str, fuzzing_case_name: str):
         try:
-            stmt = select(FuzzTestCaseGroup).where(
-                FuzzTestCaseGroup.user_id == user_id and FuzzTestCaseGroup.name == group_name
-            )
-            test_case_group = self.db.scalar(stmt)
-            group_id = test_case_group.id
             with self.db as session:
+                stmt = select(FuzzTestCaseGroup).filter(FuzzTestCaseGroup.user_id == user_id and FuzzTestCaseGroup.name == group_name)
+                res = session.scalar(stmt)
+                if res is None:
+                    raise HTTPException(status_code=422, detail="")
+                group_id = res.id
                 # 同一组下不允许重名的模糊测试用例
-                if session.scalar(select(FuzzTestCase).filter(
-                        FuzzTestCase.name == fuzzing_case_name and FuzzTestCase.test_case_group_id == group_id)
+                if session.scalar(
+                        select(FuzzTestCase).filter(FuzzTestCase.name == fuzzing_case_name and FuzzTestCase.test_case_group_id == group_id)
                 ):
-                    return "组名重复"
+                    raise HTTPException(status_code=422, detail="测试用例名称重复")
                 fuzzing_case = FuzzTestCase(name=fuzzing_case_name, test_case_group_id=group_id)
-                session.add(fuzzing_case)
-                session.commit()
                 request = RequestField(name=fuzzing_case_name, fuzzing_case_id=fuzzing_case.id)
-                session.add(request)
+                session.add_all([fuzzing_case, request])
                 session.commit()
             return "创建成功"
         except Exception as e:
-            print(f'发生错误：{e}')
+            print(f'发生错误：{e.__cause__}')
             return "出现异常，创建失败"
 
     def set_block(
