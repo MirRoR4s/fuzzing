@@ -27,7 +27,7 @@ class UserController:
         :param email: 邮箱
         """
         try:
-            self.user_service.create_user(username, password, email)
+            self.user_service.register(username, password, email)
         except DuplicateKeyError:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用户已存在")
         except DatabaseError:
@@ -44,30 +44,31 @@ class UserController:
         :return: 身份令牌
         """
         try:
-            token = self.user_service.user_login(username, password)
+            user = self.user_service.read_user(username, password)
         except ValueError:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="用户名或密码错误")
-        except Exception:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="用户名或密码错误")
+        except DatabaseError:
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="发生未知异常，服务不可用")
         else:
+            token = self.user_service.set_token(user.username)
             return token
+        
+    def delete(username: str, token: str):
+        pass
 
     def get_user_id(self, token: str) -> int:
         user_info = self.get_user_info(token)
         print(user_info)
         return self.get_user_info(token).get("id")
 
-    def get_user_info(self, token: str) -> str | dict:
+    def get_user_info(self, token: str) -> dict:
         try:
-            username: str = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]).get("sub")
-            print(username)
-            if username is None:
-                return "token 无效"
-        except JWTError:
-            return "token 无效"
-        user = self.user_service.user_login(username)
-        if user is None:
-            return "用户不存在"
-        if user.disabled:
-            return "用户未激活"
-        return {"username": user.username, "id": user.id, "email": user.email, "role": user.role}
+            user_info = self.user_service.get_user_info(token)
+            print(user_info)
+        except ValueError:
+            logging.error()
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="token 无效")
+        except Exception as e:
+            logging.error(f"未知异常 {e}")
+        else:
+            return user_info

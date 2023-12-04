@@ -17,7 +17,7 @@ Base.metadata.create_all(bind=engine)  # see HERE!
 SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
 ALGORITHM = "HS256"
 
-router = APIRouter(prefix="/user")
+router = APIRouter(prefix="/user", tags=["用户管理"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login")
 
 
@@ -30,6 +30,14 @@ def register(
     response = {"message": register_result}
     return UserRegisterResponse(**response)
 
+# @router.get("/delete")
+# def delete_user(
+#     user_name: str,
+#     user_token: Depends(oauth2_scheme),
+#     user_controller: UserController = Depends(get_user_controller),
+# ):
+#     return user_controller.delete(user_name, user_token)
+
 
 @router.post("/login", response_model=UserToken)
 def login(
@@ -37,22 +45,14 @@ def login(
     user_controller: UserController = Depends(get_user_controller)
     ) -> UserToken:
     token = user_controller.login(form_data.username, form_data.password)
-    token_data = {"message": "登录成功", "access_token": token, "token_type": "bearer"}
+    token_data = {"message": "success", "access_token": token, "token_type": "bearer"}
     return UserToken(**token_data)
 
 
-@router.get("/info", response_model=UserInfo, name="读取用户信息")
-async def read_users_me(token: str = Depends(oauth2_scheme), db= Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    user_controller = UserController(db)
+@router.get("/info", name="读取用户信息")
+async def read_users_me(
+    token: str = Depends(oauth2_scheme),
+    user_controller: UserController = Depends(get_user_controller)
+    ):
     result = user_controller.get_user_info(token)
-    print(result)
-    if result == "token 无效" or result == "用户不存在":
-        raise credentials_exception
-    if result == "用户未激活":
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="对不起，您的账户未激活")
-    return UserInfo(**result)
+    return '1'

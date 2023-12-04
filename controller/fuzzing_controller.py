@@ -4,11 +4,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import exc
 from services.sql_model import ByteField, RequestField, BlockField
 from services.fuzzing_services import FuzzingService
+from services.user_service import UserService
 from schema.fuzz_test_case_schema import Block, Byte, Bytes
 from exceptions.database_error import DatabaseError, DuplicateKeyError
+from fastapi import HTTPException, status
 
-
-class FuzzingManager:
+class FuzzingController:
     """
     模糊测试后端
     """
@@ -17,9 +18,17 @@ class FuzzingManager:
         self.db = db
         self.fuzzing_service = FuzzingService(db)
 
-    def create_case_group(self, user_id: int, group_name: str, desc: str | None = None):
+    def create_case_group(self, token: str, group_name: str, desc: str | None = None):
+        try:
+            user_id = UserService(self.db).get_user_info(token).get('id')
+            print(user_id)
             self.fuzzing_service.create_case_group(user_id, group_name, desc)
- 
+        except ValueError:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用例组已存在")
+        except DatabaseError:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端发生未知异常")    
+        else:
+            return "创建成功"
     def delete_case_group(self, user_id: int, group_name: str) -> bool:
         """
         删除具有指定用户 id 和名称的模糊测试用例组

@@ -9,43 +9,36 @@ from sqlalchemy import exc
 from services.database import get_db
 from schema.fuzz_test_case_schema import Block, Static, Byte, Bytes
 from controller.user_controller import UserController
-from controller.fuzzing_controller import FuzzingManager
+from controller.fuzzing_controller import FuzzingController
 
 
-router = APIRouter(prefix="/fuzz/test", tags=["模糊测试"])
+router = APIRouter(prefix="/fuzz/test", tags=["模糊测试管理"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login")
 
-async def get_user_id(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> int:
-    user_controller = UserController(db)
-    
+# async def get_user_id(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> int:
+#     user_controller = UserController(db)
+
+def get_fuzzing_controller(db = Depends(get_db)):
+    return FuzzingController(db)
 
 @router.post("/create/group", name="创建模糊测试用例组")
 async def create_case_group(
     group_name: str = Query(min_length=3, max_length=15),
     group_desc: str | None = Query(default=None, max_length=100),
     token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
+    fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller),
 ) -> str:
     """
     创建一个名为 group name，描述为 group desc 的模糊测试用例组
 
-        :param group_name: 模糊测试用例组名称，长度必须位于3到15之间
-        :param group_desc: 模糊测试用例组描述，长度必须小于等于100
-        :param token: 用于身份认证的token，只有通过了身份认证才可以进行当前的创建操作
-        :param db: 用于数据库操作的会话
-        :raises HTTPException: 如果组名重复或是发生了其他错误，抛出异常
+        :param group_name: 模糊测试用例组名称，长度必须位于 3 到 15 之间。
+        :param group_desc: 模糊测试用例组描述，长度必须小于等于 100。
+        :param token: 用于身份认证的 token，只有通过了身份认证才可以进行当前的创建操作。
+        :param db: 用于数据库操作的会话。
         :return: 一个包含着”创建成功“的字符串
     """
-    user_id = UserController(db).get_user_id(token)
-    fuzz_manager = FuzzingManager(db)
-    try:
-        fuzz_manager.create_case_group(user_id, group_name, group_desc)
-    except exc.IntegrityError as e :
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="组名重复")
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="发生未知异常")
-    else:
-        return "创建成功"
+    result = fuzzing_controller.create_case_group(token, group_name, group_desc)
+    return result
 
 
 @router.post("/delete/group", name="删除模糊测试用例组")
@@ -65,7 +58,7 @@ async def delete_case_group(
         :return: 删除成功返回相应信息，否则返回异常
     """
     user_id = UserController(db).get_user_id(token)
-    fuzz_manager = FuzzingManager(db)
+    fuzz_manager = FuzzingController(db)
     try:
         result = fuzz_manager.delete_case_group(user_id, group_name)
         if result is False:
@@ -96,7 +89,7 @@ async def create_case(
     :return: 一个包含着“创建成功”的字符串
     """
     user_id = UserController(db).get_user_id(token)
-    fuzz_manager = FuzzingManager(db)
+    fuzz_manager = FuzzingController(db)
     group_id = fuzz_manager.get_group_id(user_id, group_name)
     if group_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模糊测试用例组不存在")
@@ -123,7 +116,7 @@ async def delete_fuzz_test_case(
     db: Session = Depends(get_db),
 ):
     user_id = UserController(db).get_user_id(token)
-    fuzz_manager = FuzzingManager(db)
+    fuzz_manager = FuzzingController(db)
     
     try:
         group_id = fuzz_manager.get_group_id(user_id, group_name)
@@ -151,7 +144,7 @@ async def set_block(
     db: Session = Depends(get_db),
 ):
     user_id = UserController(db).get_user_id(token)
-    fuzz_manager = FuzzingManager(db)
+    fuzz_manager = FuzzingController(db)
     return fuzz_manager.set_block(
         user_id, fuzz_test_case_group_name, fuzz_test_case_name, block_info
     )
@@ -179,7 +172,7 @@ async def set_static(
         :return:
     """
     user_id = UserController(db).get_user_id(token)
-    fuzz_manager = FuzzingManager(db)
+    fuzz_manager = FuzzingController(db)
     name, default_value = static.name, static.default_value
 
 
@@ -193,7 +186,7 @@ async def set_byte(
     db: Session = Depends(get_db),
 ):
     user_id = UserController(db).get_user_id(token)
-    fuzz_manager = FuzzingManager(db)
+    fuzz_manager = FuzzingController(db)
     result = fuzz_manager.set_byte_primitive(dict(byte_info), user_id, group_name, case_name, block_name)
     if result == "模糊测试用例不存在" or result == "block 不存在" or result == "request 不存在":
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=result)
@@ -214,7 +207,7 @@ async def set_bytes(
     可表示任意长度的二进制字节串模糊测试原语。
     """
     user_id = UserController(db).get_user_id(token)
-    fuzz_manager = FuzzingManager(db)
+    fuzz_manager = FuzzingController(db)
     return fuzz_manager.set_bytes(
         user_id, fuzz_test_case_group_name, fuzz_test_case_name, bytes_info, block_name
     )

@@ -4,6 +4,7 @@ from sqlalchemy import select, insert, delete, update, exc
 from services.sql_model import FuzzTestCase, FuzzTestCaseGroup, RequestField, ByteField, BlockField
 from schema.fuzz_test_case_schema import Block, Bytes, Byte
 from exceptions.database_error import DatabaseError, DuplicateKeyError
+import logging
 
 LITTLE_ENDIAN = '<'
 
@@ -52,10 +53,19 @@ class FuzzingService:
         :param desc: 组描述，默认为 None
         :return: 创建成功返回 True
         """
-        with self.db as session:
-                stmt = insert(FuzzTestCaseGroup).values(user_id=user_id, name=name, desc=desc)
-                session.execute(stmt)
-                session.commit()
+        try:
+            with self.db as session:
+                    stmt = insert(FuzzTestCaseGroup).values(user_id=user_id, name=name, desc=desc)
+                    session.execute(stmt)
+                    session.commit()
+        except exc.IntegrityError as e:
+            logging.error(f"主键重复或唯一性异常 {e}")
+            raise ValueError
+        except Exception as e:
+            raise DatabaseError
+
+            
+            
                 
                 
     def create_case(self, group_id: int, fuzz_test_case_name: str):
