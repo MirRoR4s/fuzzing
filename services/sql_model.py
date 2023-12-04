@@ -1,7 +1,7 @@
 """
 sqlalchemy 数据库表
 """
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -22,9 +22,10 @@ class User(Base):
 
 
 class FuzzTestCaseGroup(Base):
+
     __tablename__ = "fuzz_test_case_groups"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True)
+    name = Column(String)
     desc = Column(String, nullable=True)
 
     # 多个测试用例组对应一个用户
@@ -33,6 +34,8 @@ class FuzzTestCaseGroup(Base):
 
     # 一个测试用例组对应多个测试用例
     fuzz_test_cases = relationship("FuzzTestCase", back_populates="fuzz_test_case_group")
+    # 唯一约束，确保同一用户下用例组名称不重复
+    __table_args__ = (UniqueConstraint('name', 'user_id'),)
 
 
 class FuzzTestSuite(Base):
@@ -45,6 +48,8 @@ class FuzzTestSuite(Base):
     user = relationship("User", back_populates="fuzz_test_suites")
 
     fuzz_test_cases = relationship("FuzzTestCase", back_populates="fuzz_test_suite")
+        # 唯一约束，确保同一用户下测试套件名称不重复
+    __table_args__ = (UniqueConstraint('name', 'user_id'),)
 
 
 class FuzzTestCase(Base):
@@ -68,6 +73,8 @@ class FuzzTestCase(Base):
     request_field = relationship(
         "RequestField", uselist=False, back_populates="fuzz_test_case"
     )
+    __table_args__ = (UniqueConstraint('name', 'fuzz_test_case_group_id'),)
+    __table_args__ = (UniqueConstraint('name', 'fuzz_test_suite_id'),)
 
 
 class Attribute(Base):

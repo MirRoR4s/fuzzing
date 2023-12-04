@@ -3,7 +3,7 @@ import json
 from main import app
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
-from model.sql_model import FuzzTestCaseGroup
+from services.sql_model import FuzzTestCaseGroup
 from fastapi.testclient import TestClient
 
 client = TestClient(app)
@@ -32,37 +32,51 @@ class TestFuzzManager:
         db.query(FuzzTestCaseGroup).filter(FuzzTestCaseGroup.name == "test").delete()
         db.commit()
         db.close()
+        
+    @pytest.fixture
+    def add_fuzz_test_case_group(self, token):
+        group_name = "test"
+        client.get(f"/fuzz/test/create/group?{group_name}", headers=token)
+    
+    @pytest.fixture
+    def add_fuzz_test_case(self, token):
+        case_name = "test"
+        client.get(f"/fuzz/test/create/case?{case_name}", headers=token)
 
-    def test_create_fuzzing_group(self, token, delete_group):
+    def test_create_fuzzing_group(self, token):
         """
         测试策略如下：
-            1.组名长度：0，1-20，20，> 20
+            1.组名长度：1-20，20，> 20
 
             2.组名重复：创建 test 后继续创建 test
 
-            3.组名为空：fastapi进行了封装，会返回 422
+            3.组名为空或零：fastapi进行了封装，会返回 422
 
-            注意：名为test的用例组不对外开放，仅由系统内部测试所用，所以不允许用户创建一个名为 test 的用例组
+
         """
-        prefix = "/fuzz/create/group"
-        group_name = ""
+        prefix = "/fuzz/create/group?group_name="
+        group_name = "test"
         res = client.get(url=f"{prefix}{group_name}", headers=token)
-        assert res.status_code == 422
-        assert "组名长度为零" in res.text
+        print(res.text)
+        assert res.status_code == 200
+        assert "创建成功" in res.text
 
-        assert client.get(url=f"{prefix}{group_name}", headers=token).status_code == 422
-
-        group_name = "test"
-        assert client.get(url=f"{prefix}{group_name}", headers=token).status_code == 200
-
-        group_name = "test" * 20
-        assert client.get(url=f"{prefix}{group_name}", headers=token).status_code == 422
-
-        group_name = "test"
+        # 组名重复
         res = client.get(url=f"{prefix}{group_name}", headers=token)
         assert res.status_code == 422
         assert "组名重复" in res.text
 
+        # 组名过长
+        group_name = "test" * 20
+        res = client.get(url=f"{prefix}{group_name}", headers=token)
+        assert res.status_code == 422
+        assert "组名过长" in res.text
+
+        # 系统内部组名
+        group_name = "test"
+        res = client.get(url=f"{prefix}{group_name}", headers=token)
+        assert res.status_code == 422
+        assert "系统内部" in res.text
 
     def test_create_fuzzing_case(self, token):
         header_token = token
@@ -71,3 +85,9 @@ class TestFuzzManager:
 
     def test_set_block(self, token):
         pass
+
+    def test_set_static(self, token):
+        
+        req_data = ""
+        res = client.get("/fuzz/test/set/static?")
+
