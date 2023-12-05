@@ -55,4 +55,4 @@ async def read_users_me(
     user_controller: UserController = Depends(get_user_controller)
     ):
     result = user_controller.get_user_info(token)
-    return '1'
+    return result

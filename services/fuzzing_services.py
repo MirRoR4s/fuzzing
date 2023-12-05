@@ -27,7 +27,6 @@ class FuzzingService:
                 )
                 return session.scalar(stmt)
         except Exception as e:
-            session.rollback()
             print("检查模糊测试用例组名称是否重复时发生异常", e)
             return None
 
@@ -64,18 +63,28 @@ class FuzzingService:
         except Exception as e:
             raise DatabaseError
 
-            
-            
-                
-                
-    def create_case(self, group_id: int, fuzz_test_case_name: str):
-        with self.db as session:
-            fuzz_test_case = FuzzTestCase(name=fuzz_test_case_name, fuzz_test_case_group_id=group_id)
-            session.add(fuzz_test_case)
-            session.commit()
-            request = RequestField(name=fuzz_test_case_name, fuzz_test_case_id=fuzz_test_case.id)
-            session.add(request)
-            session.commit()
+    def create_case(self, group_id: int, name: str):
+        """
+        向数据库中插入一个模糊测试用例，同时插入一个属于该用例的 Request 对象。
+
+        :param group_id: 要插入的用例所属的用例组
+        :param name: 用例的名称 
+        :raises ValueError: 当发生了主键重复或违反了唯一性约束时抛出
+        :raises DatabaseError: 当发生了其他错误时抛出
+        """
+        try:
+            with self.db as session:
+                fuzz_test_case = FuzzTestCase(name=name, fuzz_test_case_group_id=group_id)
+                session.add(fuzz_test_case)
+                session.commit()
+                request = RequestField(name=name, fuzz_test_case_id=fuzz_test_case.id)
+                session.add(request)
+                session.commit()
+        except exc.IntegrityError as e:
+            logging.error(f"主键重复或唯一性异常 {e}")
+            raise ValueError
+        except Exception as e:
+            raise DatabaseError
 
 
     def delete_fuzz_test_case_group(self, user_id: int, group_name: str) -> bool:
@@ -86,28 +95,43 @@ class FuzzingService:
         :param group_name: _description_
         :return: 删除成功返回 True，否则返回 False
         """
-        with self.db as session:
-            delete_stmt = delete(FuzzTestCaseGroup).filter(FuzzTestCaseGroup.user_id == user_id and FuzzTestCaseGroup.name == group_name)
-            result = session.execute(delete_stmt)
-            session.commit()
+        try:
+            with self.db as session:
+                delete_stmt = delete(FuzzTestCaseGroup).filter(FuzzTestCaseGroup.user_id == user_id and FuzzTestCaseGroup.name == group_name)
+                result = session.execute(delete_stmt)
+                session.commit()
+        except Exception as e:
+            logging.error("发生异常 {e}")
+            raise e
+        else:
             # 保证仅有一条记录被删除，否则的话认为删除失败
-            return True if result.rowcount == 1 else False
+            if result.rowcount != 1:
+                raise ValueError
+            
+        
 
     def delete_fuzz_test_case(self, group_id: int, case_name: str) -> bool:
-        """
-        delete_fuzz_test_case 删除具有指定组 id 和用例名称的模糊测试用例
+        """删除一个模糊测试用例
 
-        :param user_id: _description_
-        :param group_name: _description_
-        :param fuzz_test_case_name: _description_
-        :return: 删除成功返回 True，否则返回 False
+        :param group_id: _description_
+        :param case_name: _description_
+        :raises DatabaseError: _description_
+        :raises ValueError: _description_
+        :return: _description_
         """
-        with self.db as session:
-        # 根据组 id 和用例名称删除指定用例
-            delete_stmt = delete(FuzzTestCase).filter(FuzzTestCase.fuzz_test_case_group_id == group_id and FuzzTestCase.name == case_name)
-            result_proxy = session.execute(delete_stmt)
-            session.commit()
-            return True if result_proxy == 1 else False
+        try:
+            with self.db as session:
+            # 根据组 id 和用例名称删除指定用例
+                delete_stmt = delete(FuzzTestCase).filter(FuzzTestCase.fuzz_test_case_group_id == group_id and FuzzTestCase.name == case_name)
+                result_proxy = session.execute(delete_stmt)
+                session.commit()
+        except Exception as e:
+            logging.error(f"异常 {e}")
+            raise DatabaseError
+        else:
+            if result_proxy.rowcount != 1:
+                logging.error(f"删除操作异常")
+                raise ValueError
 
     def set_block(
         self, user_id: int, fuzzing_group_name: str, name: str, block_info: Block

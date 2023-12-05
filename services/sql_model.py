@@ -48,7 +48,7 @@ class FuzzTestSuite(Base):
     user = relationship("User", back_populates="fuzz_test_suites")
 
     fuzz_test_cases = relationship("FuzzTestCase", back_populates="fuzz_test_suite")
-        # 唯一约束，确保同一用户下测试套件名称不重复
+    # 唯一约束，确保同一用户下测试套件名称不重复
     __table_args__ = (UniqueConstraint('name', 'user_id'),)
 
 
@@ -70,11 +70,10 @@ class FuzzTestCase(Base):
     attributes = relationship("Attribute", back_populates="fuzz_test_case")
 
     # 一个测试用例含有一个 Request 字段
-    request_field = relationship(
-        "RequestField", uselist=False, back_populates="fuzz_test_case"
-    )
+    request_field = relationship("RequestField", uselist=False, back_populates="fuzz_test_case")
+    
     __table_args__ = (UniqueConstraint('name', 'fuzz_test_case_group_id'),)
-    __table_args__ = (UniqueConstraint('name', 'fuzz_test_suite_id'),)
+
 
 
 class Attribute(Base):

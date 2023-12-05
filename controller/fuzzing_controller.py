@@ -15,42 +15,64 @@ class FuzzingController:
     """
 
     def __init__(self, db: Session):
-        self.db = db
+        self.user_service = UserService(db)
         self.fuzzing_service = FuzzingService(db)
 
     def create_case_group(self, token: str, group_name: str, desc: str | None = None):
         try:
-            user_id = UserService(self.db).get_user_info(token).get('id')
-            print(user_id)
+            user_id = self.user_service.get_user_info(token).get('id')
             self.fuzzing_service.create_case_group(user_id, group_name, desc)
         except ValueError:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用例组已存在")
         except DatabaseError:
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端发生未知异常")    
-        else:
-            return "创建成功"
-    def delete_case_group(self, user_id: int, group_name: str) -> bool:
+        
+    def delete_case_group(self, token: str, group_name: str):
         """
         删除具有指定用户 id 和名称的模糊测试用例组
         """
-        result = self.fuzzing_service.delete_fuzz_test_case_group(user_id, group_name)
-        return result
+        try:
+            user_id = self.user_service.get_user_info(token).get('id')
+            self.fuzzing_service.delete_fuzz_test_case_group(user_id, group_name)
+        except ValueError:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="删除的用例组不存在")
+        except Exception as e:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务器内部错误")
 
-
-    def create_case(self, group_id: int, case_name: str) -> str:
+    
+    def create_case(self, token: str, group_name: str, case_name: str) -> None:
         """
-        create_case 在 id 为 group_id 的模糊测试用例组中新建一个名为 case_name 的模糊测试用例
+        创建一个模糊测试用例
 
-        :param group_id: 模糊测试用例组 id
-        :param case_name: 模糊测试用例名称
-        :return: 
+        :param token: 一个合法的用户身份令牌
+        :param group_name: 用例所属的组名称
+        :param case_name: 用例名称
         """
-        self.fuzzing_service.create_case(group_id, case_name)
+        try:
+            user_id = self.user_service.get_user_info(token).get('id')
+            group_id = self.fuzzing_service.read_case_group(user_id, group_name).id
+            self.fuzzing_service.create_case(group_id, case_name)
+        except ValueError:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用例组或用例名称错误")
+        except Exception:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常")
+        
+    def delete_fuzz_test_case(self, token: int, group_name: str, case_name: str):
+        """删除一个模糊测试用例，根据token获取用户id，随后根据用户id结合组名称获取组id，最后根据组id和用例名获取用例并删除。
 
-    def delete_fuzz_test_case(self, group_id: int, case_name: str):
-
-        result = self.fuzzing_service.delete_fuzz_test_case(group_id, case_name)
-        return result
+        :param token: 有效的身份认证令牌
+        :param group_name: 用例组名称
+        :param case_name: 用例名称
+        :return: None
+        """
+        try:
+            user_id = self.user_service.get_user_info(token).get('id')
+            group_id = self.fuzzing_service.read_case_group(user_id, group_name).id
+            self.fuzzing_service.delete_fuzz_test_case(group_id, case_name)
+        except ValueError:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用例组或用例名称错误")
+        except Exception:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常")
 
     def set_block(
         self,
@@ -58,7 +80,7 @@ class FuzzingController:
         fuzz_test_case_group_name: str,
         fuzz_test_case_name: str,
         block_info: Block,
-    ):
+    ):        
         result = self.fuzzing_service.set_block(
             user_id, fuzz_test_case_group_name, fuzz_test_case_name, block_info
         )
