@@ -39,6 +39,7 @@ class FuzzTestCaseGroup(Base):
 
 
 class FuzzTestSuite(Base):
+    
     __tablename__ = "fuzz_test_suites"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
@@ -53,112 +54,113 @@ class FuzzTestSuite(Base):
 
 
 class FuzzTestCase(Base):
+    
     __tablename__ = "fuzz_test_cases"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     desc = Column(String)
 
     # 多个测试用例对应一个测试用例组
-    fuzz_test_case_group_id = Column(Integer, ForeignKey("fuzz_test_case_groups.id"))
+    group_id = Column(Integer, ForeignKey("fuzz_test_case_groups.id"))
     fuzz_test_case_group = relationship("FuzzTestCaseGroup", back_populates="fuzz_test_cases")
 
     # 多个测试用例又对应一个测试套件
-    fuzz_test_suite_id = Column(Integer, ForeignKey("fuzz_test_suites.id"), nullable=True)
-    # 测试套件 id
+    suite_id = Column(Integer, ForeignKey("fuzz_test_suites.id"), nullable=True)
     fuzz_test_suite = relationship("FuzzTestSuite", back_populates="fuzz_test_cases")
-
-    attributes = relationship("Attribute", back_populates="fuzz_test_case")
-
-    # 一个测试用例含有一个 Request 字段
-    request_field = relationship("RequestField", uselist=False, back_populates="fuzz_test_case")
     
-    __table_args__ = (UniqueConstraint('name', 'fuzz_test_case_group_id'),)
+    # 一个测试用例含有一个 Request 字段
+    request = relationship("Request", uselist=False, back_populates="fuzz_test_case")
+    
+    __table_args__ = (UniqueConstraint('name', 'group_id'),)
 
 
 
-class Attribute(Base):
+class Request(Base):
 
-    __tablename__ = "attributes"
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    default_value = Column(Integer, default=0)
-    endian = Column(String)
-    fuzzable = Column(Boolean, default=True)
-
-    # 多个属性对应一个测试用例
-    fuzz_test_case_id = Column(Integer, ForeignKey("fuzz_test_cases.id"))
-    fuzz_test_case = relationship("FuzzTestCase", back_populates="attributes")
-
-
-class RequestField(Base):
-
-    __tablename__ = "request_fields"
+    __tablename__ = "request"
     id = Column(Integer, primary_key=True)
     name = Column(String)
 
     # 外键是模糊测试用例 id
-    fuzz_test_case_id = Column(Integer, ForeignKey("fuzz_test_cases.id"))
-    fuzz_test_case = relationship("FuzzTestCase", back_populates="request_field")
+    case_id = Column(Integer, ForeignKey("fuzz_test_cases.id"))
+    fuzz_test_case = relationship("FuzzTestCase", back_populates="request")
 
     # Request 字段可含有其它的字段
-    block_children = relationship("BlockField", back_populates="request")
-    byte_children = relationship("ByteField", back_populates="request")
-    bytes_children = relationship("BytesField", back_populates="request")
+    block = relationship("Block", back_populates="request")
+    
+    # byte = relationship("Byte", back_populates="request")
+    
+    # bytes = relationship("Bytes", back_populates="request")
 
+    static = relationship("Block", back_populates="request")
+    
+class Block(Base):
 
-class BlockField(Base):
-
-    __tablename__ = "block_fields"
+    __tablename__ = "block"
     id = Column(Integer, primary_key=True)
     name = Column(String)
     default_value = Column(Integer, default=0)
 
     # 外键是 Request id
-    request_id = Column(Integer, ForeignKey("request_fields.id"))
-    request = relationship("RequestField", back_populates="block_children")
+    request_id = Column(Integer, ForeignKey("request.id"))
+    request = relationship("Request", back_populates="block")
 
-    byte_children = relationship("ByteField", back_populates="block")
-    bytes_children = relationship("BytesField", back_populates="block")
+    # byte = relationship("Byte", back_populates="block")
+    # bytes = relationship("Bytes", back_populates="block")
+    static = relationship("Block", back_populates="block")
 
-
-class ByteField(Base):
-
-    __tablename__ = "byte_fields"
+class Static(Base):
+    """static 表原型
+    有两个唯一性约束：request id + name 以及 block id + name
+    """
+    __tablename__ = "static"
     id = Column(Integer, primary_key=True)
     name = Column(String)
     default_value = Column(Integer, default=0)
-    max_num = Column(Integer, nullable=True)
-    endian = Column(String, default=">")
-    output_format = Column(String, default="binary")
-    signed = Column(Boolean, default=False)
-    full_range = Column(Boolean, default=False)
-    fuzz_values = Column(JSON, nullable=True)
-    fuzzable = Column(Boolean, default=True)
+    request_id = Column(Integer, ForeignKey("request.id"))
+    block_id = Column(Integer, ForeignKey("block.id"))
 
-    # 外键是 Request id
-    request_id = Column(Integer, ForeignKey("request_fields.id"), nullable=True)
-    request = relationship("RequestField", back_populates="byte_children")
+    __table_args__ = (UniqueConstraint('name', 'request_id'), UniqueConstraint('name', 'block_id'))
+    
 
-    # Byte 字段可能是 Block 字段的子字段
-    block_id = Column(Integer, ForeignKey("block_fields.id"), nullable=True)
-    block = relationship("BlockField", back_populates="byte_children")
+# class Byte(Base):
+
+#     __tablename__ = "byte"
+#     id = Column(Integer, primary_key=True)
+#     name = Column(String)
+#     default_value = Column(Integer, default=0)
+#     max_num = Column(Integer, nullable=True)
+#     endian = Column(String, default=">")
+#     output_format = Column(String, default="binary")
+#     signed = Column(Boolean, default=False)
+#     full_range = Column(Boolean, default=False)
+#     fuzz_values = Column(JSON, nullable=True)
+#     fuzzable = Column(Boolean, default=True)
+
+#     # 外键是 Request id
+#     request_id = Column(Integer, ForeignKey("request.id"), nullable=True)
+#     request = relationship("RequestField", back_populates="byte")
+
+#     # Byte 字段可能是 Block 字段的子字段
+#     block_id = Column(Integer, ForeignKey("block_fields.id"), nullable=True)
+#     block = relationship("BlockField", back_populates="byte")
 
 
-class BytesField(Base):
+# class Bytes(Base):
 
-    __tablename__ = "bytes_fields"
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    default_value = Column(Integer, default=0)
-    size = Column(Integer, nullable=True)
-    padding = Column(String)
-    max_len = Column(Integer, nullable=True)
-    fuzzable = Column(Boolean, default=True)
+#     __tablename__ = "bytes"
+#     id = Column(Integer, primary_key=True)
+#     name = Column(String)
+#     default_value = Column(Integer, default=0)
+#     size = Column(Integer, nullable=True)
+#     padding = Column(String)
+#     max_len = Column(Integer, nullable=True)
+#     fuzzable = Column(Boolean, default=True)
 
-    # 外键是 Request id
-    request_id = Column(Integer, ForeignKey("request_fields.id"))
-    request = relationship("RequestField", back_populates="bytes_children")
+#     # 外键是 Request id
+#     request_id = Column(Integer, ForeignKey("requests.id"))
+#     request = relationship("RequestField", back_populates="bytes")
 
-    # Byte 字段可能是 Block 字段的子字段
-    block_id = Column(Integer, ForeignKey("block_fields.id"), nullable=True)
-    block = relationship("BlockField", back_populates="bytes_children")
+#     # Byte 字段可能是 Block 字段的子字段
+#     block_id = Column(Integer, ForeignKey("blocks.id"), nullable=True)
+#     block = relationship("BlockField", back_populates="bytes")

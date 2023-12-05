@@ -1,9 +1,8 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import select, insert, delete, update, exc
-from services.sql_model import FuzzTestCase, FuzzTestCaseGroup, RequestField, ByteField, BlockField
-from schema.fuzz_test_case_schema import Block, Bytes, Byte
-from exceptions.database_error import DatabaseError, DuplicateKeyError
+from services.sql_model import FuzzTestCase, FuzzTestCaseGroup, Request, Block, Static
+from exceptions.database_error import DatabaseError
 import logging
 
 LITTLE_ENDIAN = '<'
@@ -18,30 +17,32 @@ class FuzzingService:
     def __init__(self, db: Session):
         self.db = db
 
-    def read_case_group(self, user_id: int, group_name: str) -> FuzzTestCaseGroup | None:
+    def read_case_group(self, user_id: int, group_name: str) -> FuzzTestCaseGroup:
         try:
             with self.db as session:
-                stmt = select(FuzzTestCaseGroup).filter(
-                    FuzzTestCaseGroup.name == group_name
-                    and FuzzTestCaseGroup.user_id == user_id
-                )
-                return session.scalar(stmt)
+                stmt = select(FuzzTestCaseGroup).filter(FuzzTestCaseGroup.name == group_name and FuzzTestCaseGroup.user_id == user_id)
+                result = session.scalar(stmt)
         except Exception as e:
-            print("检查模糊测试用例组名称是否重复时发生异常", e)
-            return None
+            logging.error(f"发生异常 {e}")
+        else:
+            if result is None:
+                logging.error(f"读取用例组为空 user_id: {user_id} group_name: {group_name}")
+                raise ValueError
+            return result
 
-    def read_fuzz_test_case(self, group_id: int, fuzz_test_case_name: str) -> FuzzTestCase | None:
+    def read_case(self, group_id: int, case_name: str) -> FuzzTestCase:
         try:
             with self.db as session:
-                stmt1 = select(FuzzTestCase).filter(
-                    FuzzTestCase.name == fuzz_test_case_name and FuzzTestCase.fuzz_test_case_group_id == group_id
-                )
+                stmt1 = select(FuzzTestCase).filter(FuzzTestCase.name == case_name and FuzzTestCase.group_id == group_id)
                 fuzz_test_case = session.scalar(stmt1)
-                return fuzz_test_case
         except Exception as e:
-            session.rollback()
-            print("检查模糊测试用例名称是否重复时发生异常", e)
-            return True
+            logging.error(f"异常 {e}")
+            raise DatabaseError
+        else:
+            if fuzz_test_case is None:
+                logging.error(f"读取模糊测试用例为空 {group_id} {case_name}")
+                raise ValueError
+            return fuzz_test_case
 
     def create_case_group(self, user_id: int, name: str, desc: str | None = None):
         """
@@ -122,7 +123,7 @@ class FuzzingService:
         try:
             with self.db as session:
             # 根据组 id 和用例名称删除指定用例
-                delete_stmt = delete(FuzzTestCase).filter(FuzzTestCase.fuzz_test_case_group_id == group_id and FuzzTestCase.name == case_name)
+                delete_stmt = delete(FuzzTestCase).filter(FuzzTestCase.group_id == group_id and FuzzTestCase.name == case_name)
                 result_proxy = session.execute(delete_stmt)
                 session.commit()
         except Exception as e:
@@ -254,7 +255,17 @@ class FuzzingService:
             return "设置 bytes 字段成功!"
         return "对不起，您选择的模糊测试用例或 request 字段不存在。"
 
-    def set_static(self):
+    def set_static(self, request_id, name, default_value: int = 0, block_name: str | None = None):
+        """插入一个 static 原语。
+
+        :param case_id: static 原语所属用例的 id。
+        :param name: static 原语的名称
+        :param default_value: static 原语的默认值
+        :param block_name: 该原语所属的 block 的名称（可选），默认为 None
+        """
+        try:
+            with self.db as sesssion:
+                insert(Static).values(request_id=request_id, name=name, default_value=default_value)
         pass
 
     def set_simple(self):

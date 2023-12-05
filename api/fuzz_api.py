@@ -98,8 +98,8 @@ async def delete_fuzz_test_case(
     
 @router.post("/set/block", name="设置 Block ")
 async def set_block(
-    fuzz_test_case_group_name: str,
-    fuzz_test_case_name: str,
+    group_name: str,
+    case_name: str,
     block_info: Block,
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
@@ -107,34 +107,34 @@ async def set_block(
     user_id = UserController(db).get_user_id(token)
     fuzz_manager = FuzzingController(db)
     return fuzz_manager.set_block(
-        user_id, fuzz_test_case_group_name, fuzz_test_case_name, block_info
+        user_id, group_name, fuzz_test_case_name, block_info
     )
 
 
 @router.post("/set/static", name="设置 static ")
 async def set_static(
-    static: Annotated[Static, Body(embed=True)],
-    fuzz_test_case_group_name: str,
-    fuzz_test_case_name: str,
+    group_name: str,
+    case_name: str,
+    name: str,
+    default_value: str,
     block_name: str | None = None,
     token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
-):
+    fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller)
+) -> str:
     """
     设置一个 Static 原语的属性（可能会被插入某个 Block 中）
 
-        :param fuzz_test_case_group_name: 模糊测试用例组名称，必须在数据库中存在
-        :param fuzz_test_case_name: 模糊测试用例名称，必须在数据库中存在
+        :param group_name: 有效的模糊测试用例组名称
+        :param case_name: 有效的模糊测试用例名称
+        :param name: static 原语名称
+        :param default_value: static 原语默认值
         :param block_name: 当前原语所属 block 的名称（可选）
-        :param name: 当前原语的名称（可选，默认为 None）
-        :param default_value: 当前原语的默认值（可选，默认为 None）
         :param token:
-        :param db:
+        :param fuzzing_controller: 
         :return:
     """
-    user_id = UserController(db).get_user_id(token)
-    fuzz_manager = FuzzingController(db)
-    name, default_value = static.name, static.default_value
+    fuzzing_controller.set_static(token, group_name, case_name, block_name, name, default_value)
+    return "设置成功"
 
 
 @router.post("/set/byte", name="设置 Byte ")

@@ -87,7 +87,7 @@ class FuzzingController:
         return "设置 block 字段成功" if result is True else "设置 block 字段失败"
 
     def set_byte_primitive(self, byte_primitive: dict, user_id: int, group_name: str, case_name: str, block_name: str | None = None):
-        fuzz_test_case_id = self.fuzzing_service.read_fuzz_test_case(user_id, group_name, case_name).id
+        fuzz_test_case_id = self.fuzzing_service.read_case(user_id, group_name, case_name).id
         if fuzz_test_case_id is None:
             return "模糊测试用例不存在"
 
@@ -147,7 +147,19 @@ class FuzzingController:
             return "设置 bytes 字段成功!"
         return "对不起，您选择的模糊测试用例或 request 字段不存在。"
 
-    def set_static(self):
+    def set_static(self, token, group_name, case_name, block_name, name, default_value):
+        """设置 static 原语
+
+        :param token: _description_
+        :param group_name: _description_
+        :param case_name: _description_
+        :param block_name: _description_
+        :param name: _description_
+        :param default_value: _description_
+        """
+        group_id = self.get_group_id(token, group_name)
+        case_id = self.get_case_id(group_id, case_name)
+        
         pass
 
     def set_simple(self):
@@ -183,10 +195,6 @@ class FuzzingController:
     def set_qword(self):
         pass
 
-    def get_case_id(self, group_id: int, case_name: str) -> int:
-        case = self.fuzzing_service.read_fuzz_test_case(group_id, case_name)
-        return case.id if case is not None else None
-
     def read_request_id(self, fuzz_test_case_id: int) -> int:
         """
         get_request_id 查询数据库，获取 request id。
@@ -210,6 +218,11 @@ class FuzzingController:
         )
         return ans
     
-    def get_group_id(self, user_id:int, group_name: str) -> int | None:
+    def get_group_id(self, token:str, group_name: str) -> int | None:
+        user_id = self.user_service.get_user_info(token).get('id')
         group = self.fuzzing_service.read_case_group(user_id, group_name)
-        return group.id if group is not None else None
+        return group.id
+
+    def get_case_id(self, group_id: int, case_name: str) -> int:
+        case = self.fuzzing_service.read_case(group_id, case_name)
+        return case.id
