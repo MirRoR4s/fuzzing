@@ -2,11 +2,11 @@
 """
 from sqlalchemy.orm import Session
 from sqlalchemy import exc
-from services.sql_model import ByteField, RequestField, BlockField
+from services.sql_model import Request, Block
 from services.fuzzing_services import FuzzingService
 from services.user_service import UserService
 from schema.fuzz_test_case_schema import Block, Byte, Bytes
-from exceptions.database_error import DatabaseError, DuplicateKeyError
+from exceptions.database_error import DatabaseError, GroupNotExistError, CaseNotExistError
 from fastapi import HTTPException, status
 
 class FuzzingController:
@@ -40,17 +40,16 @@ class FuzzingController:
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务器内部错误")
 
     
-    def create_case(self, token: str, group_name: str, case_name: str) -> None:
+    def create_case(self, user_id: int, group_name: str, case_name: str) -> None:
         """
         创建一个模糊测试用例
 
-        :param token: 一个合法的用户身份令牌
+        :param user_id: 用户id
         :param group_name: 用例所属的组名称
         :param case_name: 用例名称
         """
+        group_id = self.get_group_id(user_id, group_name)
         try:
-            user_id = self.user_service.get_user_info(token).get('id')
-            group_id = self.fuzzing_service.read_case_group(user_id, group_name).id
             self.fuzzing_service.create_case(group_id, case_name)
         except ValueError:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用例组或用例名称错误")
@@ -67,7 +66,7 @@ class FuzzingController:
         """
         try:
             user_id = self.user_service.get_user_info(token).get('id')
-            group_id = self.fuzzing_service.read_case_group(user_id, group_name).id
+            group_id = self.fuzzing_service.get_case_group(user_id, group_name).id
             self.fuzzing_service.delete_fuzz_test_case(group_id, case_name)
         except ValueError:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用例组或用例名称错误")
@@ -87,11 +86,11 @@ class FuzzingController:
         return "设置 block 字段成功" if result is True else "设置 block 字段失败"
 
     def set_byte_primitive(self, byte_primitive: dict, user_id: int, group_name: str, case_name: str, block_name: str | None = None):
-        fuzz_test_case_id = self.fuzzing_service.read_case(user_id, group_name, case_name).id
+        fuzz_test_case_id = self.fuzzing_service.get_case(user_id, group_name, case_name).id
         if fuzz_test_case_id is None:
             return "模糊测试用例不存在"
 
-        request_id = self.read_request_id(fuzz_test_case_id)
+        request_id = self.get_request_id(fuzz_test_case_id)
         if request_id is None:
             return "request 不存在"
 
@@ -127,7 +126,7 @@ class FuzzingController:
         """
 
         fuzzing_case_id = self.get_case_id(user_id, group_name, name)
-        request_id = self.read_request_id(fuzzing_case_id)
+        request_id = self.get_request_id(fuzzing_case_id)
 
         if fuzzing_case_id is not None and request_id is not None:
             bytes_field = BytesField(
@@ -147,20 +146,61 @@ class FuzzingController:
             return "设置 bytes 字段成功!"
         return "对不起，您选择的模糊测试用例或 request 字段不存在。"
 
-    def set_static(self, token, group_name, case_name, block_name, name, default_value):
-        """设置 static 原语
+    def set_static(self, user_id: int, group_name: str, case_name: str, name: str, default_value: int = 0, block_name: str | None = None):
+        """设定 static 原语的各项属性，包括名称、默认值。
 
-        :param token: _description_
-        :param group_name: _description_
-        :param case_name: _description_
-        :param block_name: _description_
-        :param name: _description_
-        :param default_value: _description_
+        :param user_id: 用户 id                
+        :param group_name: 模糊测试用例组名称
+        :param case_name: 模糊测试用例名称
+        :param block_name: 当前 static 原语所属的 block，默认为 None
+        :param name: 当前 static 原语的名称
+        :param default_value: 当前 static 原语的默认值
         """
-        group_id = self.get_group_id(token, group_name)
+        group_id = self.get_group_id(user_id, group_name)
         case_id = self.get_case_id(group_id, case_name)
-        
-        pass
+        request_id = self.get_request_id(case_id)
+        try:
+            self.fuzzing_service.set_static(request_id, name, default_value, block_name)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Static 原语重名")
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常")
+    
+    def get_group_id(self, user_id:int, group_name: str) -> int:
+        try:
+            group = self.fuzzing_service.get_case_group(user_id, group_name)
+        except GroupNotExistError:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="用例组不存在")
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常")
+        return group.id
+    
+    def get_case_id(self, group_id: int, case_name: str) -> int:
+        try:
+            case = self.fuzzing_service.get_case(group_id, case_name)
+        except GroupNotExistError:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="用例不存在")
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常")
+        return case.id
+
+    def get_request_id(self, case_id: int) -> int:
+        """获取模糊测试用例对应的 Request 对象的 id。
+
+        :param case_id: 模糊测试用例的 id。
+        :return: Request 对象 id。
+        """
+        try:
+            request = self.fuzzing_service.get_request(case_id)
+        except Exception:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常")
+        return request.id
+    
+    # def read_block(self, request_id: int) -> BlockField | None:
+    #     ans = self.db.scalar(
+    #         select(BlockField).where(BlockField.request_id == request_id)
+    #     )
+    #     return ans
 
     def set_simple(self):
         pass
@@ -194,35 +234,3 @@ class FuzzingController:
 
     def set_qword(self):
         pass
-
-    def read_request_id(self, fuzz_test_case_id: int) -> int:
-        """
-        get_request_id 查询数据库，获取 request id。
-
-        :param fuzzing_case_id: _description
-        :type fuzzing_case_id: int
-        :return: _description_
-        :rtype: int
-        """
-
-        ans = self.db.scalar(
-            select(RequestField).where(
-                RequestField.fuzzing_case_id == fuzz_test_case_id
-            )
-        )
-        return ans.id if ans is not None else None
-
-    def read_block(self, request_id: int) -> BlockField | None:
-        ans = self.db.scalar(
-            select(BlockField).where(BlockField.request_id == request_id)
-        )
-        return ans
-    
-    def get_group_id(self, token:str, group_name: str) -> int | None:
-        user_id = self.user_service.get_user_info(token).get('id')
-        group = self.fuzzing_service.read_case_group(user_id, group_name)
-        return group.id
-
-    def get_case_id(self, group_id: int, case_name: str) -> int:
-        case = self.fuzzing_service.read_case(group_id, case_name)
-        return case.id

@@ -18,6 +18,17 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login")
 def get_fuzzing_controller(db = Depends(get_db)):
     return FuzzingController(db)
 
+def get_user_id(token: str = Depends(oauth2_scheme), db = Depends(get_db)):
+    """获取用户 id
+
+    :param token: 用户身份令牌，其中含有用户的 id
+    :param db: 数据库会话
+    """
+    user_controller = UserController(db)
+    user_id = user_controller.get_user_info(token).get("id")
+    return user_id
+    
+
 @router.post("/create/group", name="创建模糊测试用例组")
 async def create_case_group(
     group_name: str = Query(min_length=3, max_length=15),
@@ -63,7 +74,7 @@ async def delete_case_group(
 async def create_case(
     group_name: str = Query(min_length=3, max_length=15),
     case_name: str = Query(min_length=3, max_length=15),
-    token: str = Depends(oauth2_scheme),
+    user_id: int = Depends(get_user_id),
     fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller),
 ):
     """创建一个模糊测试用例
@@ -74,7 +85,7 @@ async def create_case(
     :param fuzzing_controller: _description_, defaults to Depends(get_fuzzing_controller)
     :return: _description_
     """
-    fuzzing_controller.create_case(token, group_name, case_name)
+    fuzzing_controller.create_case(user_id, group_name, case_name)
     return "创建成功"
     
 @router.post("/delete/case", name="删除模糊测试用例")
@@ -118,22 +129,21 @@ async def set_static(
     name: str,
     default_value: str,
     block_name: str | None = None,
-    token: str = Depends(oauth2_scheme),
+    user_id: int = Depends(get_user_id),
     fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller)
 ) -> str:
-    """
-    设置一个 Static 原语的属性（可能会被插入某个 Block 中）
+    """设置一个 Static 原语的属性（可能会被插入某个 Block 中）
 
-        :param group_name: 有效的模糊测试用例组名称
-        :param case_name: 有效的模糊测试用例名称
-        :param name: static 原语名称
-        :param default_value: static 原语默认值
-        :param block_name: 当前原语所属 block 的名称（可选）
-        :param token:
-        :param fuzzing_controller: 
-        :return:
+    :param group_name: _description_
+    :param case_name: _description_
+    :param name: _description_
+    :param default_value: _description_
+    :param block_name: _description_, defaults to None
+    :param user_id: _description_, defaults to Depends(get_user_id)
+    :param fuzzing_controller: _description_, defaults to Depends(get_fuzzing_controller)
+    :return: _description_
     """
-    fuzzing_controller.set_static(token, group_name, case_name, block_name, name, default_value)
+    fuzzing_controller.set_static(user_id, group_name, case_name, name, default_value, block_name)
     return "设置成功"
 
 

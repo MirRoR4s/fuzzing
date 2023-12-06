@@ -6,3 +6,12 @@ class DuplicateKeyError(Exception):
 
 class UserNotExistError(Exception):
     pass
+
+class GroupNotExistError(Exception):
+    pass
+
+class CaseNotExistError(Exception):
+    pass
+
+
+

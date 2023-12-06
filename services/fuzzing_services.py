@@ -1,8 +1,7 @@
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import select, insert, delete, update, exc
 from services.sql_model import FuzzTestCase, FuzzTestCaseGroup, Request, Block, Static
-from exceptions.database_error import DatabaseError
+from exceptions.database_error import DatabaseError, GroupNotExistError, CaseNotExistError
 import logging
 
 LITTLE_ENDIAN = '<'
@@ -17,20 +16,29 @@ class FuzzingService:
     def __init__(self, db: Session):
         self.db = db
 
-    def read_case_group(self, user_id: int, group_name: str) -> FuzzTestCaseGroup:
+    def get_case_group(self, user_id: int, group_name: str) -> FuzzTestCaseGroup:
         try:
             with self.db as session:
                 stmt = select(FuzzTestCaseGroup).filter(FuzzTestCaseGroup.name == group_name and FuzzTestCaseGroup.user_id == user_id)
-                result = session.scalar(stmt)
+                group = session.scalar(stmt)
         except Exception as e:
             logging.error(f"发生异常 {e}")
+            raise DatabaseError
         else:
-            if result is None:
+            if group is None:
                 logging.error(f"读取用例组为空 user_id: {user_id} group_name: {group_name}")
-                raise ValueError
-            return result
+                raise GroupNotExistError
+            return group
 
-    def read_case(self, group_id: int, case_name: str) -> FuzzTestCase:
+    def get_case(self, group_id: int, case_name: str) -> FuzzTestCase:
+        """获取一个用例组下的特定用例。
+
+        :param group_id: 有效的组id
+        :param case_name: 用例名称
+        :raises DatabaseError: _description_
+        :raises ValueError: _description_
+        :return: _description_
+        """
         try:
             with self.db as session:
                 stmt1 = select(FuzzTestCase).filter(FuzzTestCase.name == case_name and FuzzTestCase.group_id == group_id)
@@ -41,8 +49,28 @@ class FuzzingService:
         else:
             if fuzz_test_case is None:
                 logging.error(f"读取模糊测试用例为空 {group_id} {case_name}")
-                raise ValueError
+                raise CaseNotExistError
             return fuzz_test_case
+    
+    def get_request(self, case_id: int) -> Request:
+        """
+        查询一个模糊测试用例对应的Request对象
+        :param case_id: 一个有效的模糊测试用例id
+        :raises DatabaseError: _description_
+        :return: 对应的Request对象。
+        """
+        try:
+            with self.db as session:
+                stmt = select(Request).filter(Request.case_id == case_id)
+                request = session.scalar(stmt)
+        except Exception as e:
+            logging.error(f"异常 {e}")
+            raise DatabaseError
+        else:
+            if request is None:  # 在正常的情况下，如果case存在，那么request就存在。如果发生了case存在，但查不到对应request的情况，可认为服务端出现了问题。
+                logging.error("请检查服务器的数据库配置，可能发生了一些问题。")
+                raise DatabaseError
+            return request
 
     def create_case_group(self, user_id: int, name: str, desc: str | None = None):
         """
@@ -75,16 +103,17 @@ class FuzzingService:
         """
         try:
             with self.db as session:
-                fuzz_test_case = FuzzTestCase(name=name, fuzz_test_case_group_id=group_id)
+                fuzz_test_case = FuzzTestCase(name=name, group_id=group_id)
                 session.add(fuzz_test_case)
                 session.commit()
-                request = RequestField(name=name, fuzz_test_case_id=fuzz_test_case.id)
+                request = Request(name=name, case_id=fuzz_test_case.id)
                 session.add(request)
                 session.commit()
         except exc.IntegrityError as e:
             logging.error(f"主键重复或唯一性异常 {e}")
             raise ValueError
         except Exception as e:
+            logging.error(f"异常 {e}")
             raise DatabaseError
 
 
@@ -139,7 +168,7 @@ class FuzzingService:
     ) -> bool:
         try:
             with self.db as session:
-                fuzzing_case_id = self.get_fuzzing_case_id(
+                fuzzing_case_id = self.get_case(
                     user_id, fuzzing_group_name, name
                 )
                 request_id = self.get_request_id(fuzzing_case_id)
@@ -211,51 +240,9 @@ class FuzzingService:
 
         return "设置 byte 字段成功"
 
-    def set_bytes(
-        self,
-        user_id: int,
-        group_name: str,
-        name: str,
-        bytes_info: Bytes,
-        block_name: str | None = None,
-    ):
-        """
-        set_bytes_field 设置 bytes 原语各项属性，并记录在数据库中
 
-        :param user_id: 用户 id
-        :type user_id: int
-        :param group_name: 模糊测试用例组名称
-        :type group_name: str
-        :param name: 模糊测试用例名称
-        :type name: str
-        :param bytes_info: 各项属性信息
-        :type bytes_info: Bytes
-        :param block_name: 分组名称, 默认为 None
-        :type block_name: str | None, optional
-        """
 
-        fuzzing_case_id = self.get_fuzzing_case_id(user_id, group_name, name)
-        request_id = self.get_request_id(fuzzing_case_id)
-
-        if fuzzing_case_id is not None and request_id is not None:
-            bytes_field = BytesField(
-                request_id=request_id,
-                name=bytes_info.name,
-                default_value=bytes_info.default_value,
-                size=bytes_info.default_value,
-                fuzzable=bytes_info.fuzzable,
-            )
-
-            if block_name is not None:
-                bytes_field.block_id = self.get_block_id(request_id)
-
-            self.db.add(bytes_field)
-            self.db.commit()
-
-            return "设置 bytes 字段成功!"
-        return "对不起，您选择的模糊测试用例或 request 字段不存在。"
-
-    def set_static(self, request_id, name, default_value: int = 0, block_name: str | None = None):
+    def set_static(self, request_id: int, name: str, default_value: int = 0, block_name: str | None = None):
         """插入一个 static 原语。
 
         :param case_id: static 原语所属用例的 id。
@@ -264,106 +251,89 @@ class FuzzingService:
         :param block_name: 该原语所属的 block 的名称（可选），默认为 None
         """
         try:
-            with self.db as sesssion:
-                insert(Static).values(request_id=request_id, name=name, default_value=default_value)
-        pass
+            with self.db as session:
+                if block_name is  None:
+                    stmt = insert(Static).values(request_id=request_id, name=name, default_value=default_value)
+                    session.execute(stmt)
+                    session.commit()
+                else:
+                    stmt = insert(Block).values(request_id=request_id, name=name)
+                    session.execute(stmt)
+                    session.commit()
+                    # 获取刚刚插入的 block id
+                    stmt1 = select(Block).where(Block.request_id == request_id and Block.name == block_name)
+                    block_id = session.scalar(stmt1).id
+                    stmt1 = insert(Static).values(block_id=block_id, name=name, default_value=default_value)
+        except exc.IntegrityError as e:
+            logging.error(f"主键重复或唯一性约束 {e}")
+            raise ValueError
+        except Exception as e:
+            logging.error(f"异常 {e}")
+            raise DatabaseError
 
-    def set_simple(self):
-        pass
-
-    def set_delim(self):
-        pass
-
-    def set_group(self):
-        pass
-
-    def set_random_data(self):
-        pass
-
-    def set_string(self):
-        pass
-
-    def set_from_file(self):
-        pass
-
-    def set_mirror(self):
-        pass
-
-    def set_bit_field(self):
-        pass
-
-    def set_word(self):
-        pass
-
-    def set_dword(self):
-        pass
-
-    def set_qword(self):
-        pass
-
-    def get_fuzzing_case_id(self, user_id, group_name, name):
-        """
-
-        get_fuzzing_case_id _summary_
-
-        :param user_id: _description_
-        :type user_id: _type_
-        :param group_name: _description_
-        :type group_name: _type_
-        :param name: _description_
-        :type name: _type_
-        :return: _description_
-        :rtype: _type_
-        """
-
-        stmt = select(FuzzTestCaseGroup).where(
-            FuzzTestCaseGroup.user_id == user_id
-            and FuzzTestCaseGroup.name == group_name
-        )
-
-        group_id = self.db.scalar(stmt).id
-        stmt1 = select(FuzzTestCase).where(
-            FuzzTestCase.name == name and FuzzTestCase.test_case_group_id == group_id
-        )
-
-        ans = self.db.scalar(stmt1)
-        return ans.id if ans is not None else None
-
-    def get_request_id(self, fuzzing_case_id: int) -> int:
-        """
-        get_request_id 查询数据库，获取 request id。
-
-        :param fuzzing_case_id: _description
-        :type fuzzing_case_id: int
-        :return: _description_
-        :rtype: int
-        """
-
-        ans = self.db.scalar(
-            select(RequestField).where(RequestField.fuzzing_case_id == fuzzing_case_id)
-        )
-        return ans.id if ans is not None else None
-
-    def read_block(self, request_id: int) -> BlockField | None:
-        ans = self.db.scalar(
-            select(BlockField).where(BlockField.request_id == request_id)
-        )
-        return ans
+    # def read_block(self, request_id: int) -> BlockField | None:
+    #     ans = self.db.scalar(
+    #         select(BlockField).where(BlockField.request_id == request_id)
+    #     )
+    #     return ans
     
-    def update_block_request_id(self, block_id: int, request_id: int) -> bool:
-        with self.db as session:
-            try:
-                update_stmt = (
-                    update(BlockField).
-                    where(BlockField.id == block_id).
-                    values(request_id=request_id)
-                )
-                session.execute(update_stmt)
-                session.commit()
-                return True
-            except Exception as e:
-                session.rollback()
-                print(f'发生异常{e}')
-                return False
+    # def update_block_request_id(self, block_id: int, request_id: int) -> bool:
+    #     with self.db as session:
+    #         try:
+    #             update_stmt = (
+    #                 update(BlockField).
+    #                 where(BlockField.id == block_id).
+    #                 values(request_id=request_id)
+    #             )
+    #             session.execute(update_stmt)
+    #             session.commit()
+    #             return True
+    #         except Exception as e:
+    #             session.rollback()
+    #             print(f'发生异常{e}')
+    #             return False
                 
                 
+    # def set_bytes(
+    #     self,
+    #     user_id: int,
+    #     group_name: str,
+    #     name: str,
+    #     bytes_info: Bytes,
+    #     block_name: str | None = None,
+    # ):
+    #     """
+    #     set_bytes_field 设置 bytes 原语各项属性，并记录在数据库中
+
+    #     :param user_id: 用户 id
+    #     :type user_id: int
+    #     :param group_name: 模糊测试用例组名称
+    #     :type group_name: str
+    #     :param name: 模糊测试用例名称
+    #     :type name: str
+    #     :param bytes_info: 各项属性信息
+    #     :type bytes_info: Bytes
+    #     :param block_name: 分组名称, 默认为 None
+    #     :type block_name: str | None, optional
+    #     """
+
+    #     fuzzing_case_id = self.get_case(user_id, group_name, name)
+    #     request_id = self.get_request_id(fuzzing_case_id)
+
+    #     if fuzzing_case_id is not None and request_id is not None:
+    #         bytes_field = BytesField(
+    #             request_id=request_id,
+    #             name=bytes_info.name,
+    #             default_value=bytes_info.default_value,
+    #             size=bytes_info.default_value,
+    #             fuzzable=bytes_info.fuzzable,
+    #         )
+
+    #         if block_name is not None:
+    #             bytes_field.block_id = self.get_block_id(request_id)
+
+    #         self.db.add(bytes_field)
+    #         self.db.commit()
+
+    #         return "设置 bytes 字段成功!"
+    #     return "对不起，您选择的模糊测试用例或 request 字段不存在。"

@@ -1,5 +1,5 @@
 """
-sqlalchemy 数据库表
+漏洞挖掘系统后端的数据库原型、结构
 """
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
@@ -7,6 +7,8 @@ from .database import Base
 
 
 class User(Base):
+    """用户表，包含 id、username、password、email、role、disabled 列。注意一个用户拥有多个用例组和套件。
+    """
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
@@ -22,7 +24,9 @@ class User(Base):
 
 
 class FuzzTestCaseGroup(Base):
-
+    """模糊测试用例组表，包含 id、name、desc、user_id 列。注意一个用例组包含多个用例。
+    同时为了根据用户 id 和用例组名称唯一定位到一个用例组，以这两列为基础定义了一个唯一性约束。
+    """
     __tablename__ = "fuzz_test_case_groups"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
@@ -54,6 +58,10 @@ class FuzzTestSuite(Base):
 
 
 class FuzzTestCase(Base):
+    """模糊测试用例表原型，包含 id、name、desc、group_id、suite_id 几列。
+    注意一个模糊测试用例有且仅有一个 Request 对象
+    为了通过用例名称和组 id 唯一定位一个模糊测试用例，用 name 和 group_id 定义了一个唯一性约束。
+    """
     
     __tablename__ = "fuzz_test_cases"
     id = Column(Integer, primary_key=True, index=True)
@@ -76,14 +84,15 @@ class FuzzTestCase(Base):
 
 
 class Request(Base):
-
+    """Request 表原型，包含 id、name、case id 三列，其中 case id 是外键，指向模糊测试用例表。
+    """
     __tablename__ = "request"
     id = Column(Integer, primary_key=True)
     name = Column(String)
 
     # 外键是模糊测试用例 id
     case_id = Column(Integer, ForeignKey("fuzz_test_cases.id"))
-    fuzz_test_case = relationship("FuzzTestCase", back_populates="request")
+    fuzz_test_case = relationship("FuzzTestCase", uselist=False, back_populates="request")
 
     # Request 字段可含有其它的字段
     block = relationship("Block", back_populates="request")
@@ -92,10 +101,13 @@ class Request(Base):
     
     # bytes = relationship("Bytes", back_populates="request")
 
-    static = relationship("Block", back_populates="request")
+    static = relationship("Static", back_populates="request")
     
 class Block(Base):
+    """Block 表原型，含有 id、name、default value、request id 四列。
 
+    :param Base: _description_
+    """
     __tablename__ = "block"
     id = Column(Integer, primary_key=True)
     name = Column(String)
@@ -107,19 +119,22 @@ class Block(Base):
 
     # byte = relationship("Byte", back_populates="block")
     # bytes = relationship("Bytes", back_populates="block")
-    static = relationship("Block", back_populates="block")
+    static = relationship("Static", back_populates="block")
 
 class Static(Base):
-    """static 表原型
+    """static 表原型，含有 id、name、default value、request id、block id
     有两个唯一性约束：request id + name 以及 block id + name
     """
     __tablename__ = "static"
     id = Column(Integer, primary_key=True)
     name = Column(String)
     default_value = Column(Integer, default=0)
-    request_id = Column(Integer, ForeignKey("request.id"))
-    block_id = Column(Integer, ForeignKey("block.id"))
-
+    
+    request_id = Column(Integer, ForeignKey("request.id"), nullable=True)
+    request = relationship("Request", back_populates="static") 
+    
+    block_id = Column(Integer, ForeignKey("block.id"), nullable=True)
+    block = relationship("Block", back_populates="static")
     __table_args__ = (UniqueConstraint('name', 'request_id'), UniqueConstraint('name', 'block_id'))
     
 

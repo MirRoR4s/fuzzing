@@ -21,7 +21,7 @@ router = APIRouter(prefix="/user", tags=["用户管理"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login")
 
 
-@router.post("/register")
+@router.post("/register", name="用户注册")
 def register(
     user_register: UserRegister, 
     user_controller: UserController = Depends(get_user_controller)
@@ -39,7 +39,7 @@ def register(
 #     return user_controller.delete(user_name, user_token)
 
 
-@router.post("/login", response_model=UserToken)
+@router.post("/login", response_model=UserToken, name="用户登录")
 def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     user_controller: UserController = Depends(get_user_controller)
