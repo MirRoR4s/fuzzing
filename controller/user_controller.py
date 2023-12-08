@@ -1,20 +1,17 @@
-from sqlalchemy.orm.session import Session
-from sqlalchemy.exc import IntegrityError
-from schema.user_schema import UserRegister, UserInfo
-from schema.user_response_schema import UserRegisterResponse
-from services.user_service import UserService
-from jose import jwt, JWTError
-from fastapi import HTTPException, status
+"""
+2023/12/8 update
+"""
 import logging
-from exceptions.database_error import DatabaseError, DuplicateKeyError
-
-
-SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
-ALGORITHM = "HS256"
+from sqlalchemy.orm.session import Session
+from fastapi import HTTPException, status
+from exceptions.database_error import DatabaseError, DuplicateKeyError, UserNotExistError
+from services.user_service import UserService
 
 
 class UserController:
-
+    """
+    用户控制器类，主要进行的操作在于接受用户服务类返回的结果，以及捕获相关的异常并返回给客户端。
+    """
     def __init__(self, db: Session):
         self.user_service = UserService(db)
 
@@ -28,33 +25,33 @@ class UserController:
         """
         try:
             self.user_service.register(username, password, email)
-        except DuplicateKeyError:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用户已存在")
-        except DatabaseError:
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="发生未知异常，服务不可用")
-        else:
-            return "注册成功"
+        except DuplicateKeyError as e:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用户已存在") from e
+        except DatabaseError as e:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常") from e
+        return "注册成功"
 
     def login(self, username: str, password: str) -> str:
         """
-        login 根据用户名和密码完成登录
+        用户登录。
 
         :param username: 用户名
         :param password: 密码
         :return: 身份令牌
         """
         try:
-            user = self.user_service.read_user(username, password)
-        except ValueError:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="用户名或密码错误")
-        except DatabaseError:
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="发生未知异常，服务不可用")
-        else:
-            token = self.user_service.set_token(user.username)
-            return token
+            user = self.user_service.select_user(username, password)
+        except UserNotExistError as e:
+            raise HTTPException(404, detail="用户不存在") from e
+        except ValueError as e:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="用户名或密码错误") from e
+        except DatabaseError as e:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常") from e
+        token = self.user_service.create_token(user.username)
+        return token
         
-    def delete(username: str, token: str):
-        pass
+    # def delete(username: str, token: str):
+    #     pass
 
     def get_user_id(self, token: str) -> int:
         user_info = self.get_user_info(token)
@@ -62,13 +59,17 @@ class UserController:
         return self.get_user_info(token).get("id")
 
     def get_user_info(self, token: str) -> dict:
+        """
+        获取当前用户的信息。
+
+        :param token: 身份令牌
+        :return: 用户名、id、邮箱、角色。
+        """
         try:
             user_info = self.user_service.get_user_info(token)
-            print(user_info)
-        except ValueError:
-            logging.error()
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="token 无效")
+        except ValueError as e:
+            logging.error(e)
+            raise HTTPException(status_code=401, detail="token 无效") from e
         except Exception as e:
-            logging.error(f"未知异常 {e}")
-        else:
-            return user_info
+            raise HTTPException(status_code=500, detail="服务端异常") from e
+        return user_info
