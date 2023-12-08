@@ -1,5 +1,5 @@
 """
-2023/12/8 update
+2023/12/8 代码格式规范化。
 """
 import logging
 from sqlalchemy.orm.session import Session
@@ -49,13 +49,17 @@ class UserController:
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常") from e
         token = self.user_service.create_token(user.username)
         return token
-        
+
     # def delete(username: str, token: str):
     #     pass
 
     def get_user_id(self, token: str) -> int:
-        user_info = self.get_user_info(token)
-        print(user_info)
+        """
+        获取用户id。
+
+        :param token: 有效的身份令牌。
+        :return: 用户id。
+        """
         return self.get_user_info(token).get("id")
 
     def get_user_info(self, token: str) -> dict:

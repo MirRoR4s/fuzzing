@@ -3,7 +3,7 @@
 """
 from typing import Annotated
 from fastapi import APIRouter, Depends
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordRequestForm as LoginForm, OAuth2PasswordBearer
 from schema.user_schema import UserRegister
 from controller.user_controller import UserController
 from schema.user_schema import UserInfo, UserToken
@@ -33,12 +33,12 @@ def register(register_data: UserRegister, uc: UserController = Depends(get_uc)):
     """
     TODO
     """
-    register_result = uc.register(register_data.username, register_data.password, register_data.email)
-    return UserRegisterResponse(**{"message": register_result})
+    result = uc.register(register_data.username, register_data.password, register_data.email)
+    return UserRegisterResponse(**{"message": result})
 
 
 @router.post("/login", response_model=UserToken, name="用户登录")
-def login(user_data: Annotated[OAuth2PasswordRequestForm, Depends()], uc: UserController = Depends(get_uc)):
+def login(user_data: Annotated[LoginForm, Depends()], uc: UserController = Depends(get_uc)):
     """
     TODO    
     """
@@ -47,13 +47,13 @@ def login(user_data: Annotated[OAuth2PasswordRequestForm, Depends()], uc: UserCo
     return UserToken(**token_data)
 
 
-@router.get("/info", name="读取用户信息")
+@router.get("/info", response_model=UserInfo, name="读取用户信息")
 def read_info(token = Depends(oauth2_scheme), uc: UserController = Depends(get_uc)):
     """
     TODO
     """
     result = uc.get_user_info(token)
-    return result
+    return UserInfo(**result)
 
 # @router.get("/delete")
 # def delete_user(
@@ -62,4 +62,3 @@ def read_info(token = Depends(oauth2_scheme), uc: UserController = Depends(get_u
 #     user_controller: UserController = Depends(get_user_controller),
 # ):
 #     return user_controller.delete(user_name, user_token)
-

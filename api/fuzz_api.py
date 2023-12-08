@@ -1,11 +1,10 @@
 """
 模糊测试 fastapi 接口
 """
+from typing import Annotated
 from fastapi import APIRouter, Depends, Query, HTTPException, status, Body
 from fastapi.security import OAuth2PasswordBearer
-from typing import Annotated
 from sqlalchemy.orm import Session
-from sqlalchemy import exc
 from services.database import get_db
 from schema.fuzz_test_case_schema import Block, Static, Byte, Bytes
 from controller.user_controller import UserController
@@ -16,6 +15,12 @@ router = APIRouter(prefix="/fuzz/test", tags=["模糊测试管理"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login")
 
 def get_fuzzing_controller(db = Depends(get_db)):
+    """
+    获取一个 FuzzingController 类对象。
+
+    :param db: sqlalchemy数据库会话。
+    :return: FuzzingController 实例。
+    """
     return FuzzingController(db)
 
 def get_user_id(token: str = Depends(oauth2_scheme), db = Depends(get_db)):
@@ -27,13 +32,12 @@ def get_user_id(token: str = Depends(oauth2_scheme), db = Depends(get_db)):
     user_controller = UserController(db)
     user_id = user_controller.get_user_info(token).get("id")
     return user_id
-    
 
 @router.post("/create/group", name="创建模糊测试用例组")
 async def create_case_group(
     group_name: str = Query(min_length=3, max_length=15),
     group_desc: str | None = Query(default=None, max_length=100),
-    token: str = Depends(oauth2_scheme),
+    user_id: int = Depends(get_user_id),
     fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller),
 ) -> str:
     """
@@ -41,11 +45,10 @@ async def create_case_group(
 
         :param group_name: 模糊测试用例组名称，长度必须位于 3 到 15 之间。
         :param group_desc: 模糊测试用例组描述，长度必须小于等于 100。
-        :param token: 用于身份认证的 token，只有通过了身份认证才可以进行当前的创建操作。
-        :param db: 用于数据库操作的会话。
+        :param user_id: 有效的用户id。
         :return: 一个包含着”创建成功“的字符串
     """
-    fuzzing_controller.create_case_group(token, group_name, group_desc)
+    fuzzing_controller.create_case_group(user_id, group_name, group_desc)
     return "创建成功"
 
 
@@ -87,7 +90,7 @@ async def create_case(
     """
     fuzzing_controller.create_case(user_id, group_name, case_name)
     return "创建成功"
-    
+
 @router.post("/delete/case", name="删除模糊测试用例")
 async def delete_fuzz_test_case(
     group_name: str = Query(min_length=3, max_length=15),

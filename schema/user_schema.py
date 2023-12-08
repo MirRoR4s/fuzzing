@@ -22,7 +22,8 @@ class UserRegister(UserBase):
     }
 
 
-class UserInfo(UserBase):
+class UserInfo(BaseModel):
+    username: str
     id: int
     email: str
     role: str

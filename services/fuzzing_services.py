@@ -1,8 +1,8 @@
+import logging
 from sqlalchemy.orm import Session
-from sqlalchemy import select, insert, delete, update, exc
+from sqlalchemy import select, insert, delete, exc
 from services.sql_model import FuzzTestCase, FuzzTestCaseGroup, Request, Block, Static
 from exceptions.database_error import DatabaseError, GroupNotExistError, CaseNotExistError
-import logging
 
 LITTLE_ENDIAN = '<'
 
@@ -12,25 +12,33 @@ class FuzzingService:
     """
     模糊测试后端
     """
-    
+
     def __init__(self, db: Session):
         self.db = db
 
-    def get_case_group(self, user_id: int, group_name: str) -> FuzzTestCaseGroup:
+    def select_case_group(self, u_id: int, g_name: str) -> FuzzTestCaseGroup:
+        """
+        查询一个模糊测试用例组并返回。
+
+        :param user_id: 用户id，必须在数据库中存在。
+        :param group_name: 组名称，必须在数据库中存在。
+        :raises DatabaseError: 发生了未知错误时抛出该异常。
+        :raises GroupNotExistError: 当数据库中不存在查询的组时抛出该异常。
+        :return: 查询到的用例组对象。
+        """
         try:
             with self.db as session:
-                stmt = select(FuzzTestCaseGroup).filter(FuzzTestCaseGroup.name == group_name and FuzzTestCaseGroup.user_id == user_id)
+                stmt = select(FuzzTestCaseGroup).filter(FuzzTestCaseGroup.name == g_name and FuzzTestCaseGroup.user_id == u_id)
                 group = session.scalar(stmt)
         except Exception as e:
-            logging.error(f"发生异常 {e}")
-            raise DatabaseError
-        else:
-            if group is None:
-                logging.error(f"读取用例组为空 user_id: {user_id} group_name: {group_name}")
-                raise GroupNotExistError
-            return group
+            logging.error("异常 %s", e)
+            raise DatabaseError from e  
+        if group is None:
+            logging.error("读取用例组为空 user_id: %s group_name: %s", u_id, g_name)
+            raise GroupNotExistError
+        return group
 
-    def get_case(self, group_id: int, case_name: str) -> FuzzTestCase:
+    def get_case(self, gid: int, cname: str) -> FuzzTestCase:
         """获取一个用例组下的特定用例。
 
         :param group_id: 有效的组id
@@ -41,16 +49,15 @@ class FuzzingService:
         """
         try:
             with self.db as session:
-                stmt1 = select(FuzzTestCase).filter(FuzzTestCase.name == case_name and FuzzTestCase.group_id == group_id)
+                stmt1 = select(FuzzTestCase).filter(FuzzTestCase.name == cname and FuzzTestCase.group_id == gid)
                 fuzz_test_case = session.scalar(stmt1)
         except Exception as e:
-            logging.error(f"异常 {e}")
-            raise DatabaseError
-        else:
-            if fuzz_test_case is None:
-                logging.error(f"读取模糊测试用例为空 {group_id} {case_name}")
-                raise CaseNotExistError
-            return fuzz_test_case
+            logging.error("异常 %s", e)
+            raise DatabaseError from e
+        if fuzz_test_case is None:
+            logging.error("读取模糊测试用例为空 %s %s", gid, cname)
+            raise CaseNotExistError
+        return fuzz_test_case
     
     def get_request(self, case_id: int) -> Request:
         """
@@ -64,8 +71,8 @@ class FuzzingService:
                 stmt = select(Request).filter(Request.case_id == case_id)
                 request = session.scalar(stmt)
         except Exception as e:
-            logging.error(f"异常 {e}")
-            raise DatabaseError
+            logging.error("异常 %s", e)
+            raise DatabaseError from e
         else:
             if request is None:  # 在正常的情况下，如果case存在，那么request就存在。如果发生了case存在，但查不到对应request的情况，可认为服务端出现了问题。
                 logging.error("请检查服务器的数据库配置，可能发生了一些问题。")
@@ -83,14 +90,14 @@ class FuzzingService:
         """
         try:
             with self.db as session:
-                    stmt = insert(FuzzTestCaseGroup).values(user_id=user_id, name=name, desc=desc)
-                    session.execute(stmt)
-                    session.commit()
+                stmt = insert(FuzzTestCaseGroup).values(user_id=user_id, name=name, desc=desc)
+                session.execute(stmt)
+                session.commit()
         except exc.IntegrityError as e:
-            logging.error(f"主键重复或唯一性异常 {e}")
-            raise ValueError
+            logging.error("主键重复或唯一性异常 %s", e)
+            raise ValueError from e
         except Exception as e:
-            raise DatabaseError
+            raise DatabaseError from e
 
     def create_case(self, group_id: int, name: str):
         """
@@ -110,24 +117,24 @@ class FuzzingService:
                 session.add(request)
                 session.commit()
         except exc.IntegrityError as e:
-            logging.error(f"主键重复或唯一性异常 {e}")
+            logging.error("主键重复或唯一性异常 %s", e)
             raise ValueError
         except Exception as e:
-            logging.error(f"异常 {e}")
+            logging.error("异常 %s", e)
             raise DatabaseError
 
 
-    def delete_fuzz_test_case_group(self, user_id: int, group_name: str) -> bool:
+    def delete_fuzz_test_case_group(self, u_id: int, g_name: str) -> bool:
         """
-        delete_fuzz_test_case_group 从数据库中删除具有指定 user id 和 group name 的模糊测试用例组
-
-        :param user_id: _description_
-        :param group_name: _description_
+        从数据库中删除模糊测试用例组。
+        
+        :param user_id: 用户id，要求在数据库中存在。
+        :param group_name: 模糊测试用例组名称，要求在数据库中存在。
         :return: 删除成功返回 True，否则返回 False
         """
         try:
             with self.db as session:
-                delete_stmt = delete(FuzzTestCaseGroup).filter(FuzzTestCaseGroup.user_id == user_id and FuzzTestCaseGroup.name == group_name)
+                delete_stmt = delete(FuzzTestCaseGroup).filter(FuzzTestCaseGroup.user_id == u_id and FuzzTestCaseGroup.name == g_name)
                 result = session.execute(delete_stmt)
                 session.commit()
         except Exception as e:
@@ -136,7 +143,7 @@ class FuzzingService:
         else:
             # 保证仅有一条记录被删除，否则的话认为删除失败
             if result.rowcount != 1:
-                raise ValueError
+                raise GroupNotExistError
             
         
 

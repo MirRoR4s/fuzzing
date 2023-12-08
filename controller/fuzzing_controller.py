@@ -1,13 +1,12 @@
 """
+模糊测试控制器类。
 """
 from sqlalchemy.orm import Session
-from sqlalchemy import exc
-from services.sql_model import Request, Block
+from fastapi import HTTPException, status
 from services.fuzzing_services import FuzzingService
 from services.user_service import UserService
-from schema.fuzz_test_case_schema import Block, Byte, Bytes
 from exceptions.database_error import DatabaseError, GroupNotExistError, CaseNotExistError
-from fastapi import HTTPException, status
+from schema.fuzz_test_case_schema import Block, Byte, Bytes
 
 class FuzzingController:
     """
@@ -18,28 +17,37 @@ class FuzzingController:
         self.user_service = UserService(db)
         self.fuzzing_service = FuzzingService(db)
 
-    def create_case_group(self, token: str, group_name: str, desc: str | None = None):
-        try:
-            user_id = self.user_service.get_user_info(token).get('id')
-            self.fuzzing_service.create_case_group(user_id, group_name, desc)
-        except ValueError:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用例组已存在")
-        except DatabaseError:
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端发生未知异常")    
-        
-    def delete_case_group(self, token: str, group_name: str):
+    def create_case_group(self, user_id: int, group_name: str, desc: str | None = None):
         """
-        删除具有指定用户 id 和名称的模糊测试用例组
-        """
-        try:
-            user_id = self.user_service.get_user_info(token).get('id')
-            self.fuzzing_service.delete_fuzz_test_case_group(user_id, group_name)
-        except ValueError:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="删除的用例组不存在")
-        except Exception as e:
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务器内部错误")
+        TODO
 
-    
+        :param user_id: _description_
+        :param group_name: _description_
+        :param desc: _description_, defaults to None
+        :raises HTTPException: _description_
+        :raises HTTPException: _description_
+        """
+        try:
+            self.fuzzing_service.create_case_group(user_id, group_name, desc)
+        except ValueError as e:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用例组已存在") from e
+        except DatabaseError as e:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常") from e
+
+    def delete_case_group(self, user_id: int, group_name: str):
+        """
+        删除一个模糊测试用例组
+        
+        :param user_id: 用户id，要求在数据库中存在。
+        :param group_name: 模糊测试用例组名称，要求在数据库中存在。
+        """
+        try:
+            self.fuzzing_service.delete_fuzz_test_case_group(user_id, group_name)
+        except GroupNotExistError as e:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="用例组不存在") from e
+        except Exception as e:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务器内部错误") from e
+
     def create_case(self, user_id: int, group_name: str, case_name: str) -> None:
         """
         创建一个模糊测试用例
@@ -51,10 +59,10 @@ class FuzzingController:
         group_id = self.get_group_id(user_id, group_name)
         try:
             self.fuzzing_service.create_case(group_id, case_name)
-        except ValueError:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用例组或用例名称错误")
-        except Exception:
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常")
+        except ValueError as e:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用例组或用例名称错误") from e
+        except Exception as e:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常") from e
         
     def delete_fuzz_test_case(self, token: int, group_name: str, case_name: str):
         """删除一个模糊测试用例，根据token获取用户id，随后根据用户id结合组名称获取组id，最后根据组id和用例名获取用例并删除。
@@ -66,30 +74,33 @@ class FuzzingController:
         """
         try:
             user_id = self.user_service.get_user_info(token).get('id')
-            group_id = self.fuzzing_service.get_case_group(user_id, group_name).id
+            group_id = self.fuzzing_service.select_case_group(user_id, group_name).id
             self.fuzzing_service.delete_fuzz_test_case(group_id, case_name)
-        except ValueError:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用例组或用例名称错误")
-        except Exception:
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常")
+        except ValueError as e:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用例组或用例名称错误") from e
+        except Exception as e:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常") from e
 
-    def set_block(
-        self,
-        user_id: int,
-        g_name: str,
-        c_name: str,
-        block_info: dict,
-    ): 
+    def set_block(self, user_id: int, g_name: str, c_name: str, block_info: dict): 
+        """
+        设置block类型的属性。
+
+        :param user_id: _description_
+        :param g_name: _description_
+        :param c_name: _description_
+        :param block_info: _description_
+        :raises HTTPException: _description_
+        :raises HTTPException: _description_
+        """
         request_id = self.get_id(user_id, g_name, c_name)
         name = block_info.get('name')
         default_value = block_info.get('default_value')
-        children_name = block_info.get('children_name')
         try:
-            result = self.fuzzing_service.set_block(request_id, name, default_value, children_name)
-        except ValueError:
-            raise HTTPException(status_code=422, detail="block 名称重复")
-        except Exception:
-            raise HTTPException(status_code=500, detail="服务端异常")
+            self.fuzzing_service.set_block(request_id, name, default_value)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail="block 名称重复") from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail="服务端异常") from e
         
     def set_byte_primitive(self, byte_primitive: dict, user_id: int, group_name: str, case_name: str, block_name: str | None = None):
         fuzz_test_case_id = self.fuzzing_service.get_case(user_id, group_name, case_name).id
@@ -199,7 +210,7 @@ class FuzzingController:
     
     def get_group_id(self, user_id:int, group_name: str) -> int:
         try:
-            group = self.fuzzing_service.get_case_group(user_id, group_name)
+            group = self.fuzzing_service.select_case_group(user_id, group_name)
         except GroupNotExistError:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="用例组不存在")
         except Exception:
