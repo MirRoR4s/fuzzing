@@ -163,27 +163,26 @@ class FuzzingService:
                 logging.error(f"删除操作异常")
                 raise ValueError
 
-    def set_block(
-        self, user_id: int, fuzzing_group_name: str, name: str, block_info: Block
-    ) -> bool:
+    def set_block(self, request_id: int, name: str, default_value: int = 0):
+        """
+        设置 block 类型的各项属性，包括其 request 的 id、名称、默认值，然后插入数据库中。
+
+        :param request_id: 包含当前 block 的 request 类型的 id，必须是一个非负数。
+        :param name: 当前 block 类型的名称。
+        :param default_value: 当前 block 的默认值，必须是一个非负数，默认为零。
+        :return: None
+        """
         try:
             with self.db as session:
-                fuzzing_case_id = self.get_case(
-                    user_id, fuzzing_group_name, name
-                )
-                request_id = self.get_request_id(fuzzing_case_id)
-
-                if fuzzing_case_id is not None and request_id is not None:
-                    default_value = block_info.default_value
-                    stmt = insert(BlockField).values(
-                        request_id=request_id, name=name, default_value=default_value
-                    )
-                    session.execute(stmt)
-                    session.commit()
-                    return True
+                stmt = insert(Block).values(request_id=request_id, name=name, default_value=default_value)
+                session.execute(stmt)
+                session.commit()
+        except exc.IntegrityError as e:
+            logging.error(f"{e}")
+            raise ValueError
         except Exception as e:
-            print(e)
-            return False
+            logging.error(f"{e}")
+            raise DatabaseError
 
     def create_byte(
         self,
@@ -257,13 +256,12 @@ class FuzzingService:
                     session.execute(stmt)
                     session.commit()
                 else:
-                    stmt = insert(Block).values(request_id=request_id, name=name)
-                    session.execute(stmt)
-                    session.commit()
                     # 获取刚刚插入的 block id
-                    stmt1 = select(Block).where(Block.request_id == request_id and Block.name == block_name)
-                    block_id = session.scalar(stmt1).id
+                    stmt = select(Block).where(Block.request_id == request_id and Block.name == block_name)
+                    block_id = session.scalar(stmt).id
                     stmt1 = insert(Static).values(block_id=block_id, name=name, default_value=default_value)
+                    session.execute(stmt1)
+                    session.commit()
         except exc.IntegrityError as e:
             logging.error(f"主键重复或唯一性约束 {e}")
             raise ValueError

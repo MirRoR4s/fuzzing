@@ -10,7 +10,13 @@ class FuzzableBlock(Fuzzable):
     request_name: str | None = None
     children: Fuzzable | None | list[Fuzzable] = None
     
-class Block(FuzzableBlock):
+class Block(BaseModel):
+    """
+    fot the detailed information, see this: http://boofuzz.readthedocs.io/
+    """
+    name: str
+    default_value: int | None = None
+    children_name: str | None = None
     group: str | None = None
     encoder: str | None = None
     dep: str | None = None
@@ -18,8 +24,9 @@ class Block(FuzzableBlock):
     dep_values: list[bytes] | None = None
     dep_compare: str | None = None
 
-class Static(Fuzzable):
-    pass
+class Static(BaseModel):
+    name: str  = 'test'
+    default_value: int = 0
     
     
 class BitField(Fuzzable):

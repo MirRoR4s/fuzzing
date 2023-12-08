@@ -106,33 +106,17 @@ async def delete_fuzz_test_case(
     fuzzing_controller.delete_fuzz_test_case(token, group_name, case_name)
     return "删除成功"
     
-    
-@router.post("/set/block", name="设置 Block ")
-async def set_block(
-    group_name: str,
-    case_name: str,
-    block_info: Block,
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
-):
-    user_id = UserController(db).get_user_id(token)
-    fuzz_manager = FuzzingController(db)
-    return fuzz_manager.set_block(
-        user_id, group_name, fuzz_test_case_name, block_info
-    )
-
-
 @router.post("/set/static", name="设置 static ")
 async def set_static(
     group_name: str,
     case_name: str,
-    name: str,
-    default_value: str,
+    static: Static,
     block_name: str | None = None,
     user_id: int = Depends(get_user_id),
     fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller)
 ) -> str:
-    """设置一个 Static 原语的属性（可能会被插入某个 Block 中）
+    """
+    设置一个 Static 原语的属性（可能会被插入某个 Block 中）
 
     :param group_name: _description_
     :param case_name: _description_
@@ -143,9 +127,32 @@ async def set_static(
     :param fuzzing_controller: _description_, defaults to Depends(get_fuzzing_controller)
     :return: _description_
     """
+    name = static.name
+    default_value = static.default_value
     fuzzing_controller.set_static(user_id, group_name, case_name, name, default_value, block_name)
     return "设置成功"
 
+@router.post("/set/block", name="设置 Block ")
+async def set_block(
+    group_name: str,
+    case_name: str,
+    block_info: Block,
+    user_id: int = Depends(get_user_id),
+    fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller)
+):
+    """
+    set attribute of the block 
+
+    :param group_name: 
+    :param case_name: name of the fuzz test case that contain this block. 
+    :param block_info: Attribute of this block, contain name, default_value, request_name 
+    :param user_id: user's id.
+    :param fuzzing_controller: 
+    :return: _description_
+    """
+    fuzzing_controller.set_block(user_id, group_name, case_name, dict(block_info))
+    return "设置成功"
+    
 
 @router.post("/set/byte", name="设置 Byte ")
 async def set_byte(

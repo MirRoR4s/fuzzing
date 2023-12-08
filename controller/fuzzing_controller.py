@@ -76,15 +76,21 @@ class FuzzingController:
     def set_block(
         self,
         user_id: int,
-        fuzz_test_case_group_name: str,
-        fuzz_test_case_name: str,
-        block_info: Block,
-    ):        
-        result = self.fuzzing_service.set_block(
-            user_id, fuzz_test_case_group_name, fuzz_test_case_name, block_info
-        )
-        return "设置 block 字段成功" if result is True else "设置 block 字段失败"
-
+        g_name: str,
+        c_name: str,
+        block_info: dict,
+    ): 
+        request_id = self.get_id(user_id, g_name, c_name)
+        name = block_info.get('name')
+        default_value = block_info.get('default_value')
+        children_name = block_info.get('children_name')
+        try:
+            result = self.fuzzing_service.set_block(request_id, name, default_value, children_name)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="block 名称重复")
+        except Exception:
+            raise HTTPException(status_code=500, detail="服务端异常")
+        
     def set_byte_primitive(self, byte_primitive: dict, user_id: int, group_name: str, case_name: str, block_name: str | None = None):
         fuzz_test_case_id = self.fuzzing_service.get_case(user_id, group_name, case_name).id
         if fuzz_test_case_id is None:
@@ -156,15 +162,40 @@ class FuzzingController:
         :param name: 当前 static 原语的名称
         :param default_value: 当前 static 原语的默认值
         """
-        group_id = self.get_group_id(user_id, group_name)
-        case_id = self.get_case_id(group_id, case_name)
-        request_id = self.get_request_id(case_id)
+        # group_id = self.get_group_id(user_id, group_name)
+        # case_id = self.get_case_id(group_id, case_name)
+        # request_id = self.get_request_id(case_id)
+        request_id = self.get_id(user_id, group_name, case_name)
         try:
             self.fuzzing_service.set_static(request_id, name, default_value, block_name)
         except ValueError:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Static 原语重名")
         except Exception:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常")
+    
+    def set_block(self, user_id: int, group_name: str, case_name: str,block_info: dict):
+        request_id = self.get_id(user_id, group_name, case_name)
+        print(block_info)
+        name = block_info.get('name')
+        default_value = block_info.get('default_value')
+        #  children_name = block_info.get('children_name')
+        try:             
+            self.fuzzing_service.set_block(request_id, name, default_value)
+        except ValueError:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Block 重名")
+        except Exception:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常")
+    
+    def set_attribute(self, user_id: int, group_name: str, case_name: str, **kwargs):
+        group_id = self.get_group_id(user_id, group_name)
+        case_id = self.get_case_id(group_id, case_name)
+        request_id = self.get_request_id(case_id)
+    
+    def get_id(self, user_id, group_name, case_name):
+        group_id = self.get_group_id(user_id, group_name)
+        case_id = self.get_case_id(group_id, case_name)
+        request_id = self.get_request_id(case_id)
+        return request_id
     
     def get_group_id(self, user_id:int, group_name: str) -> int:
         try:

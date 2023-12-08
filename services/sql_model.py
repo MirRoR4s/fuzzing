@@ -106,7 +106,7 @@ class Request(Base):
 class Block(Base):
     """Block 表原型，含有 id、name、default value、request id 四列。
 
-    :param Base: _description_
+    :param Base: _description_l;
     """
     __tablename__ = "block"
     id = Column(Integer, primary_key=True)
@@ -116,10 +116,12 @@ class Block(Base):
     # 外键是 Request id
     request_id = Column(Integer, ForeignKey("request.id"))
     request = relationship("Request", back_populates="block")
-
+    
     # byte = relationship("Byte", back_populates="block")
     # bytes = relationship("Bytes", back_populates="block")
     static = relationship("Static", back_populates="block")
+    
+    __table_args__ = (UniqueConstraint('name', 'request_id'),)
 
 class Static(Base):
     """static 表原型，含有 id、name、default value、request id、block id
