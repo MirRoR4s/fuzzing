@@ -155,24 +155,18 @@ async def set_block(
     """
     fuzzing_controller.set_block(user_id, group_name, case_name, dict(block_info))
     return "设置成功"
-    
+
 
 @router.post("/set/byte", name="设置 Byte ")
 async def set_byte(
-    byte_info: Annotated[Byte, Body(embed=True)],
+    byte_data: Annotated[Byte, Body(embed=True)],
     group_name: str,
     case_name: str,
     block_name: str | None = None,
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
+    user_id: int = Depends(get_user_id),
+    fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller)
 ):
-    user_id = UserController(db).get_user_id(token)
-    fuzz_manager = FuzzingController(db)
-    result = fuzz_manager.set_byte_primitive(dict(byte_info), user_id, group_name, case_name, block_name)
-    if result == "模糊测试用例不存在" or result == "block 不存在" or result == "request 不存在":
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=result)
-    return result
-    
+    return fuzzing_controller.set_primitive("byte", dict(byte_data), user_id, group_name, case_name, block_name)
 
 
 @router.post("/set/bytes", name="设置 Bytes 字段")

@@ -3,6 +3,7 @@
 """
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
+from boofuzz import Fuzzable, Byte
 from services.fuzzing_services import FuzzingService
 from services.user_service import UserService
 from exceptions.database_error import DatabaseError, GroupNotExistError, CaseNotExistError
@@ -16,16 +17,20 @@ class FuzzingController:
     def __init__(self, db: Session):
         self.user_service = UserService(db)
         self.fuzzing_service = FuzzingService(db)
+        self.field_handlers = {
+            "static": self.fuzzing_service.set_static,
+            "block": self.fuzzing_service.set_block,
+        }
 
     def create_case_group(self, user_id: int, group_name: str, desc: str | None = None):
         """
         TODO
 
-        :param user_id: _description_
-        :param group_name: _description_
-        :param desc: _description_, defaults to None
-        :raises HTTPException: _description_
-        :raises HTTPException: _description_
+        :param user_id: 
+        :param group_name: 
+        :param desc: , defaults to None
+        :raises HTTPException: 
+        :raises HTTPException: 
         """
         try:
             self.fuzzing_service.create_case_group(user_id, group_name, desc)
@@ -85,12 +90,12 @@ class FuzzingController:
         """
         设置block类型的属性。
 
-        :param user_id: _description_
-        :param g_name: _description_
-        :param c_name: _description_
-        :param block_info: _description_
-        :raises HTTPException: _description_
-        :raises HTTPException: _description_
+        :param user_id: 
+        :param g_name: 
+        :param c_name: 
+        :param block_info: 
+        :raises HTTPException: 
+        :raises HTTPException: 
         """
         request_id = self.get_id(user_id, g_name, c_name)
         name = block_info.get('name')
@@ -102,22 +107,10 @@ class FuzzingController:
         except Exception as e:
             raise HTTPException(status_code=500, detail="服务端异常") from e
         
-    def set_byte_primitive(self, byte_primitive: dict, user_id: int, group_name: str, case_name: str, block_name: str | None = None):
-        fuzz_test_case_id = self.fuzzing_service.get_case(user_id, group_name, case_name).id
-        if fuzz_test_case_id is None:
-            return "模糊测试用例不存在"
-
-        request_id = self.get_request_id(fuzz_test_case_id)
-        if request_id is None:
-            return "request 不存在"
-
-        if block_name is not None:
-            block_id = self.fuzzing_service.read_block(request_id).id
-            if block_id is None:
-                return "block 不存在"
-
-        self.fuzzing_service.update_block_request_id(block_id, request_id)
-        self.fuzzing_service.create_byte(request_id, block_id, **byte_primitive)
+    def set_byte(self, byte_primitive: dict, user_id: int, group_name: str, case_name: str, block_name: str | None = None):
+        
+        
+        pass
 
     def set_bytes(
         self,
@@ -243,36 +236,27 @@ class FuzzingController:
     #         select(BlockField).where(BlockField.request_id == request_id)
     #     )
     #     return ans
+    
+    def set_primitive(self, primitive_name: str, primitive: dict,  user_id: int, group_name: str, case_name: str, block_name: str | None = None,):
+        """
+        依据不同的原语名称，调用不同的数据库函数。
+        当原语名称为 byte，调用 set byte 插入 byte 字段信息。
+        当原语名称为 bytes，调用 set bytes 插入 bytes 字段信息。
 
-    def set_simple(self):
-        pass
-
-    def set_delim(self):
-        pass
-
-    def set_group(self):
-        pass
-
-    def set_random_data(self):
-        pass
-
-    def set_string(self):
-        pass
-
-    def set_from_file(self):
-        pass
-
-    def set_mirror(self):
-        pass
-
-    def set_bit_field(self):
-        pass
-
-    def set_word(self):
-        pass
-
-    def set_dword(self):
-        pass
-
-    def set_qword(self):
-        pass
+        :param primitive_name: 原语名称。
+        :param primitive: 含有原语各项字段的字典。
+        :param block_name: 原语所属块的名称，默认为 None
+        :param user_id: 用户 id。
+        :param group_name: 用例组名称。
+        :param case_name: 用例名称。
+        :raises HTTPException: 
+        :raises HTTPException: 
+        """
+        request_id = self.get_id(user_id, group_name, case_name)
+        try:
+            self.fuzzing_service.set_primitive(primitive_name, primitive, request_id, block_name)
+        except ValueError as e:
+                raise HTTPException(status_code=422, detail=str(e)) from e
+        except Exception as e:
+                raise HTTPException(status_code=500, detail="服务端异常") from e
+        return "设置成功"

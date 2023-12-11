@@ -1,8 +1,9 @@
 import logging
+import boofuzz
 from sqlalchemy.orm import Session
 from sqlalchemy import select, insert, delete, exc
-from services.sql_model import FuzzTestCase, FuzzTestCaseGroup, Request, Block, Static
-from exceptions.database_error import DatabaseError, GroupNotExistError, CaseNotExistError
+from services.sql_model import FuzzTestCase, FuzzTestCaseGroup, Request, Block, Static, Byte
+from exceptions.database_error import DatabaseError, GroupNotExistError, CaseNotExistError, UnsupportedFieldError
 
 LITTLE_ENDIAN = '<'
 
@@ -15,6 +16,10 @@ class FuzzingService:
 
     def __init__(self, db: Session):
         self.db = db
+        self.field_handlers = {
+            "static": self.set_static,
+            "block": self.set_block,
+        }
 
     def select_case_group(self, u_id: int, g_name: str) -> FuzzTestCaseGroup:
         """
@@ -258,7 +263,7 @@ class FuzzingService:
         """
         try:
             with self.db as session:
-                if block_name is  None:
+                if block_name is None:
                     stmt = insert(Static).values(request_id=request_id, name=name, default_value=default_value)
                     session.execute(stmt)
                     session.commit()
@@ -270,12 +275,88 @@ class FuzzingService:
                     session.execute(stmt1)
                     session.commit()
         except exc.IntegrityError as e:
-            logging.error(f"主键重复或唯一性约束 {e}")
-            raise ValueError
+            logging.error("主键重复或违反唯一性约束 %s", e)
+            raise ValueError from e
         except Exception as e:
-            logging.error(f"异常 {e}")
-            raise DatabaseError
+            logging.error("异常 %s", e)
+            raise DatabaseError from e
+        
+    def set_primitive(self, primitive_name: str, primitive: dict, request_id: int, block_name: str | None = None):
+        """
+        依据不同字段类的名称，调用不同的数据库函数。
+        当字段名称为 byte，调用 set byte 插入 byte 字段信息。
+        当字段名称为 bytes，调用 set bytes 插入 bytes 字段信息。
 
+        :param field: 字段类名
+        :param field: 所有字段类的共同父类，至少包含名称（不是字段类的名称，是该字段的实例变量的名称）、默认值两项。
+        """
+        handler = self.field_handlers.get(primitive_name)
+        if handler:
+            try:
+                handler(primitive, request_id, block_name)
+            except exc.IntegrityError as e:
+                logging.error("主键重复或违反唯一性约束 %s", e)
+                raise ValueError from e
+            except Exception as e:
+                logging.error("异常 %s", e)
+                raise DatabaseError from e
+        else:
+            raise UnsupportedFieldError("不支持的字段功能")
+                
+    def set_byte(self, byte: dict, request_id: int, block_name: str| None = None):
+        """
+        将一个 byte 原语的信息插入到数据库中
+
+        :param byte: byte 原语信息字典，包括如下字段：
+        
+            1. name: str 原语的名称
+            2. default value: int 原语的默认值，默认为零。
+            3. max num: int 原语可变异的最大值 
+            4. endian: str 原语的端序，默认是小端，用 '<' 表示。
+            5. output format: str 原语的输出格式，默认是 'binary'
+            6. signed: bool 
+            7. full range: bool 
+            8. fuzz values: list[int]
+            9. fuzzable: bool 是否变异当前原语，默认为 True。
+        
+        关于各字段的具体含义参见：https://boofuzz.readthedocs.io/en/stable/user/protocol-definition.html#byte
+        
+        :param request_id: 当前原语所属的 request 的名称，必须是一个非负数。
+        :param block_name: 当前原语所属的 block 的名称，默认为 None
+        """
+        with self.db as session:
+            name=byte.get('name'),
+            default_value=byte.get('default_value'),
+            max_num=byte.get("max_num"),
+            endian=byte.get("endian"),
+            output_format=byte.get("output_format"),
+            signed=byte.get("signed"),
+            full_range=byte.get("full_range"),
+            fuzz_values=byte.get("fuzz_values"),
+            fuzzable=byte.get("fuzzable")
+            
+            block_id = None
+            if block_name is not None:
+                # 获取刚刚插入的 block id
+                stmt = select(Block).where(Block.request_id == request_id and Block.name == block_name)
+                block_id = session.scalar(stmt).id
+                
+            stmt = insert(Byte).values(
+                request_id=request_id,
+                block_id=block_id,
+                name=name,
+                default_value=default_value,
+                max_num=max_num,
+                endian=endian,
+                output_format=output_format,
+                signed=signed,
+                full_range=full_range,
+                fuzz_values=fuzz_values,
+                fuzzable=fuzzable
+                )
+            session.execute(stmt)
+            session.commit()
+    
     # def read_block(self, request_id: int) -> BlockField | None:
     #     ans = self.db.scalar(
     #         select(BlockField).where(BlockField.request_id == request_id)

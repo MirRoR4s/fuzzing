@@ -25,7 +25,6 @@ class TestSetBlock:
     """
         
     def test_set_block_valid_input(self, db_session):
-        # Partition: Valid input with no conflicts
         your_instance = FuzzingService(db_session)
         your_instance.set_block(request_id=1, name="ValidBlock4", default_value=42)
         block = db_session.query(Block).filter_by(request_id=1, name="ValidBlock4", default_value=42).first()
@@ -35,7 +34,6 @@ class TestSetBlock:
         db_session.commit()
 
     def test_set_block_duplicate_entry(self, db_session):
-        # Partition: Duplicate entry for the same (request_id, name)
         fuzzing_service = FuzzingService(db_session)
         duplicate_block = Block(request_id=2, name="DuplicateBlock", default_value=42)
         db_session.add(duplicate_block)

@@ -97,7 +97,7 @@ class Request(Base):
     # Request 字段可含有其它的字段
     block = relationship("Block", back_populates="request")
     
-    # byte = relationship("Byte", back_populates="request")
+    byte = relationship("Byte", back_populates="request")
     
     # bytes = relationship("Bytes", back_populates="request")
 
@@ -117,7 +117,7 @@ class Block(Base):
     request_id = Column(Integer, ForeignKey("request.id"))
     request = relationship("Request", back_populates="block")
     
-    # byte = relationship("Byte", back_populates="block")
+    byte = relationship("Byte", back_populates="block")
     # bytes = relationship("Bytes", back_populates="block")
     static = relationship("Static", back_populates="block")
     
@@ -140,27 +140,27 @@ class Static(Base):
     __table_args__ = (UniqueConstraint('name', 'request_id'), UniqueConstraint('name', 'block_id'))
     
 
-# class Byte(Base):
+class Byte(Base):
 
-#     __tablename__ = "byte"
-#     id = Column(Integer, primary_key=True)
-#     name = Column(String)
-#     default_value = Column(Integer, default=0)
-#     max_num = Column(Integer, nullable=True)
-#     endian = Column(String, default=">")
-#     output_format = Column(String, default="binary")
-#     signed = Column(Boolean, default=False)
-#     full_range = Column(Boolean, default=False)
-#     fuzz_values = Column(JSON, nullable=True)
-#     fuzzable = Column(Boolean, default=True)
+    __tablename__ = "byte"
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    default_value = Column(Integer, default=0)
+    max_num = Column(Integer, nullable=True)
+    endian = Column(String, default=">")
+    output_format = Column(String, default="binary")
+    signed = Column(Boolean, default=False)
+    full_range = Column(Boolean, default=False)
+    fuzz_values = Column(JSON, nullable=True)
+    fuzzable = Column(Boolean, default=True)
 
-#     # 外键是 Request id
-#     request_id = Column(Integer, ForeignKey("request.id"), nullable=True)
-#     request = relationship("RequestField", back_populates="byte")
+    # 外键是 Request id
+    request_id = Column(Integer, ForeignKey("request.id"))
+    request = relationship("Request", back_populates="byte")
 
-#     # Byte 字段可能是 Block 字段的子字段
-#     block_id = Column(Integer, ForeignKey("block_fields.id"), nullable=True)
-#     block = relationship("BlockField", back_populates="byte")
+    # Byte 字段可能是 Block 字段的子字段
+    block_id = Column(Integer, ForeignKey("block.id"), nullable=True)
+    block = relationship("Block", back_populates="byte")
 
 
 # class Bytes(Base):
