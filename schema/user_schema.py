@@ -9,6 +9,7 @@ class UserRegister(UserBase):
     # username: str = Field(pattern="^[a-zA-Z0-9_-]{4,16}$")
     password: str = Field(pattern="^[a-zA-Z0-9_-]{4,16}$")
     email: str = Field(pattren=r'([A-Za-z0-9]+[.-_])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{2,})+')
+    
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -36,7 +37,7 @@ class UserInfo(BaseModel):
                     "id": 0,
                     "email": "mirror4s@birkenwald.cn",
                     "role": "normal"
-
+                    
                 }
             ]
         }

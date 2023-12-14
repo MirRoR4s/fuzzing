@@ -15,9 +15,9 @@ class UserController:
     def __init__(self, db: Session):
         self.user_service = UserService(db)
 
-    def register(self, username: str, password: str, email: str) -> str:
+    def register(self, username: str, password: str, email: str):
         """
-        register 注册一个用户名为 username，密码为 password，邮箱为 email 的新用户
+        register 注册一个用户名为 username，密码为 password，邮箱为 email 的新用户。
 
         :param username: 用户名
         :param password: 密码
@@ -29,9 +29,8 @@ class UserController:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="用户已存在") from e
         except DatabaseError as e:
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="服务端异常") from e
-        return "注册成功"
 
-    def login(self, username: str, password: str) -> str:
+    def login(self, username, password) -> str:
         """
         用户登录。
 
@@ -40,7 +39,7 @@ class UserController:
         :return: 身份令牌
         """
         try:
-            user = self.user_service.select_user(username, password)
+            user = self.user_service.get_user(username, password)
         except UserNotExistError as e:
             raise HTTPException(404, detail="用户不存在") from e
         except ValueError as e:

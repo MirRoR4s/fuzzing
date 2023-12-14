@@ -28,6 +28,24 @@ class Static(BaseModel):
     name: str  = 'test'
     default_value: int = 0
     
+class Simple(BaseModel):
+    name: str
+    default_value: int
+    fuzz_values: list[int]
+    fuzzable: bool
+
+class Delim(BaseModel):
+    name: str
+    default_value: str
+    fuzzable: bool
+    
+
+class Group(BaseModel):
+    name: str
+    values: list[bytes] | list[str]
+    default_value: str
+    encoding: str = 'ascii'
+    fuzzable: bool = True
     
 class BitField(Fuzzable):
     width: int = 8
@@ -37,8 +55,17 @@ class BitField(Fuzzable):
     signed: bool = False
     full_range: bool = False
     
-class Byte(BitField):
-    pass
+class Byte(BaseModel):
+    name: str
+    default_value: int
+    max_num: int
+    endian: str
+    output_format: str
+    signed: bool
+    full_range: bool
+    full_values: list[int]
+    fuzzable: bool
+    
 
 class Bytes(Fuzzable):
     size: int | None = None

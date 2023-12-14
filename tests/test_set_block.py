@@ -26,7 +26,7 @@ class TestSetBlock:
         
     def test_set_block_valid_input(self, db_session):
         your_instance = FuzzingService(db_session)
-        your_instance.set_block(request_id=1, name="ValidBlock4", default_value=42)
+        your_instance.set_block(case_id=1, name="ValidBlock4", default_value=42)
         block = db_session.query(Block).filter_by(request_id=1, name="ValidBlock4", default_value=42).first()
         assert block is not None
         stmt = delete(Block).filter_by(request_id=1, name="ValidBlock4", default_value=42)
@@ -39,7 +39,7 @@ class TestSetBlock:
         db_session.add(duplicate_block)
         db_session.commit()
         with pytest.raises(ValueError):
-            fuzzing_service.set_block(request_id=2, name="DuplicateBlock", default_value=42)
+            fuzzing_service.set_block(case_id=2, name="DuplicateBlock", default_value=42)
 
     # def test_set_block_invalid_request_id(self, db_session):
     #     # Partition: Invalid request_id (e.g., negative value)
@@ -57,7 +57,7 @@ class TestSetBlock:
     def test_set_block_default_value_not_specified(self, db_session):
         # Partition: No default_value specified
         your_instance = FuzzingService(db_session)
-        your_instance.set_block(request_id=4, name="NoDefaultSpecified")
+        your_instance.set_block(case_id=4, name="NoDefaultSpecified")
         block = db_session.query(Block).filter_by(request_id=4, name="NoDefaultSpecified", default_value=0).first()
         assert block is not None
         stmt = delete(Block).filter_by(request_id=1, name="ValidBlock4", default_value=42)

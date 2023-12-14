@@ -1,13 +1,13 @@
+import logging
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm.session import Session
 from sqlalchemy import select, insert
 from sqlalchemy.exc import IntegrityError
-from services.sql_model import User
-from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-
+from services.sql_model import User
 from exceptions.database_error import DatabaseError, DuplicateKeyError, UserNotExistError
-import logging
+
 
 
 # to get a string like this run:
@@ -25,34 +25,31 @@ class UserService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def select_user(self, username: str, password: str = '', flag: bool = False) -> User:
+    def get_user(self, username, password=None) -> User:
         """
-        查询用户。
-        :param username: 要查询的用户的用户名，必须存在于数据库中。
-        :param password: 要查询的用户的密码，默认为空（用于系统内部调用获取用户信息）
-        :param flag: flag 为 True 时表明时系统内部调用，用于获取当前用户信息，为 False 时表明用于登录功能身份校验。
-        :return: User 对象。
+        获取名称为 username，密码为 password 的指定用户。
+
+        :param username: 用户名称，必须在数据库中存在
+        :param password: 用户密码，默认情况下为空，表示不进行密码验证。若不为空，则必须在数据库中存在。
+        :raises DatabaseError: 其它异常。
+        :raises UserNotExistError: 用户不存在。
+        :raises ValueError: 用户密码不正确。
+        :return: 获取到的用户。
         """
         try:
             with self.db as session:
                 stmt = select(User).where(User.username == username)
                 user = session.scalar(stmt)
-                if flag:
-                    return user
         except Exception as e:
-            logging.error("发生异常 %s", e)
+            logging.error('select_user 发生异常 %s', e)
             raise DatabaseError from e
         if user is None:
-            logging.error("用户不存在 %s", username)
             raise UserNotExistError
-        if UserService.verify_password(password, user.password) is False:
-            logging.error("用户名或密码错误 username: %s password: %s", username, password)
-            raise ValueError
+        if password is not None:
+            if UserService.verify_password(password, user.password) is False:
+                logging.error("用户名或密码错误 username: %s password: %s", username, password)
+                raise ValueError
         return user
-            
-    # def _is_register(self, username: str) -> bool:
-    #     with self.db as session:
-    #         return session.scalar(select(User).filter(User.username == username)) is not None
 
     @staticmethod
     def verify_password(plain_password, hashed_password) -> bool:
@@ -75,7 +72,6 @@ class UserService:
         """
         return pwd_context.hash(password)
 
-
     def register(self, username: str, passwd: str, email: str):
         """
         用户注册。
@@ -89,7 +85,6 @@ class UserService:
         passwd = pwd_context.hash(passwd)  # 以哈希形式存储用户的密码，而非明文
         try:
             with self.db as session:
-                # 向 users 表插入一个新用户
                 stmt = insert(User).values(
                     username=username,
                     password=passwd,
@@ -129,8 +124,8 @@ class UserService:
         """
         获取当前用户信息。
 
-        :param token: 用户的身份令牌。
-        :raises ValueError: 当 jwt 无效或是未查询到对应的用户时抛出。
+        :param token: 有效的身份令牌。
+        :raises ValueError: jwt 无效或是未查询到对应的用户。
         :return: 用户名称、用户id、用户邮箱、用户等级。
         """
         try:
@@ -138,8 +133,5 @@ class UserService:
         except JWTError as e:
             logging.error('JWT 解码失败 %s', e)
             raise ValueError from e
-        user = self.select_user(username, flag=True)
-        if user is None or user.disabled:
-            logging.error('异常')
-            raise ValueError
+        user = self.get_user(username)
         return {"username": user.username, "id": user.id, "email": user.email, "role": user.role}

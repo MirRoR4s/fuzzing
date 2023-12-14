@@ -13,6 +13,7 @@ class GroupNotExistError(Exception):
 class CaseNotExistError(Exception):
     pass
 
-class UnsupportedFieldError(Exception)
+class UnsupportedFieldError(Exception):
+    pass
 
 

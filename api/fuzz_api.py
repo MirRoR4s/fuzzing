@@ -2,11 +2,10 @@
 模糊测试 fastapi 接口
 """
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query, HTTPException, status, Body
+from fastapi import APIRouter, Depends, Query, Body
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
 from services.database import get_db
-from schema.fuzz_test_case_schema import Block, Static, Byte, Bytes
+from schema.fuzz_test_case_schema import Block, Static, Simple, Delim, Byte, Bytes, Group
 from controller.user_controller import UserController
 from controller.fuzzing_controller import FuzzingController
 
@@ -41,35 +40,34 @@ async def create_case_group(
     fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller),
 ) -> str:
     """
-    创建一个名为 group name，描述为 group desc 的模糊测试用例组
+    创建一个名为 group name，描述信息为 group desc 的模糊测试用例组
 
         :param group_name: 模糊测试用例组名称，长度必须位于 3 到 15 之间。
         :param group_desc: 模糊测试用例组描述，长度必须小于等于 100。
         :param user_id: 有效的用户id。
         :return: 一个包含着”创建成功“的字符串
     """
-    fuzzing_controller.create_case_group(user_id, group_name, group_desc)
+    fuzzing_controller.add_case_group(user_id, group_name, group_desc)
     return "创建成功"
 
 
 @router.post("/delete/group", name="删除模糊测试用例组")
 async def delete_case_group(
     group_name: str = Query(min_length=3, max_length=15),
-    token: str = Depends(oauth2_scheme),
+    user_id = Depends(get_user_id),
     fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller),
 ):
     """
     删除一个名为 group name 的模糊测试用例组
 
         :param group_name: 组名
-        :param token: 身份认证 token
+        :param user_id: 用户 id
         :param db: 数据库会话
         :raises HTTPException: 如果组名不存在或者发生了其他错误，抛出异常
 
-        :return: 删除成功返回相应信息，否则返回异常
+        :return: 删除成功返回 "删除成功"
     """
-    
-    fuzzing_controller.delete_case_group(token, group_name)
+    fuzzing_controller.delete_case_group(user_id, group_name)
     return "删除成功"
 
 
@@ -80,22 +78,22 @@ async def create_case(
     user_id: int = Depends(get_user_id),
     fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller),
 ):
-    """创建一个模糊测试用例
-
-    :param group_name: _description_, defaults to Query(min_length=3, max_length=15)
-    :param case_name: _description_, defaults to Query(min_length=3, max_length=15)
-    :param token: _description_, defaults to Depends(oauth2_scheme)
-    :param fuzzing_controller: _description_, defaults to Depends(get_fuzzing_controller)
-    :return: _description_
     """
-    fuzzing_controller.create_case(user_id, group_name, case_name)
-    return "创建成功"
+    在名为 group_name 的模糊测试用例组下创建一个名为 case_name 的模糊测试用例。
 
+        :param group_name: 模糊测试用例组名称，长度必须位于 3 到 15 之间。
+        :param case_name: 模糊测试用例名称，长度必须位于 3 到 15 之间。
+        :param user_id: 有效的用户 id。
+        :param fuzzing_controller: 模糊测试接口控制器类实例
+        :return: "创建成功"
+    """
+    return fuzzing_controller.add_case(user_id, group_name, case_name)
+    
 @router.post("/delete/case", name="删除模糊测试用例")
 async def delete_fuzz_test_case(
     group_name: str = Query(min_length=3, max_length=15),
     case_name: str = Query(min_length=3, max_length=15),
-    token: str = Depends(oauth2_scheme),
+    user_id: int = Depends(get_user_id),
     fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller),
 ):
     """删除一个模糊测试用例
@@ -106,34 +104,8 @@ async def delete_fuzz_test_case(
     :param fuzzing_controller: 模糊测试接口的依赖
     :return: _description_
     """
-    fuzzing_controller.delete_fuzz_test_case(token, group_name, case_name)
+    fuzzing_controller.delete_case(user_id, group_name, case_name)
     return "删除成功"
-    
-@router.post("/set/static", name="设置 static ")
-async def set_static(
-    group_name: str,
-    case_name: str,
-    static: Static,
-    block_name: str | None = None,
-    user_id: int = Depends(get_user_id),
-    fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller)
-) -> str:
-    """
-    设置一个 Static 原语的属性（可能会被插入某个 Block 中）
-
-    :param group_name: _description_
-    :param case_name: _description_
-    :param name: _description_
-    :param default_value: _description_
-    :param block_name: _description_, defaults to None
-    :param user_id: _description_, defaults to Depends(get_user_id)
-    :param fuzzing_controller: _description_, defaults to Depends(get_fuzzing_controller)
-    :return: _description_
-    """
-    name = static.name
-    default_value = static.default_value
-    fuzzing_controller.set_static(user_id, group_name, case_name, name, default_value, block_name)
-    return "设置成功"
 
 @router.post("/set/block", name="设置 Block ")
 async def set_block(
@@ -156,6 +128,30 @@ async def set_block(
     fuzzing_controller.set_block(user_id, group_name, case_name, dict(block_info))
     return "设置成功"
 
+@router.post("/set/static", name="设置 static ")
+async def set_static(
+    group_name: str,
+    case_name: str,
+    static_primitive: Static,
+    block_name: str | None = None,
+    user_id: int = Depends(get_user_id),
+    fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller)
+) -> str:
+    """
+    设置一个 Static 原语的属性（可能会被插入某个 Block 中）
+
+        :param group_name: _description_
+        :param case_name: _description_
+        :param name: _description_
+        :param default_value: _description_
+        :param block_name: _description_, defaults to None
+        :param user_id: _description_, defaults to Depends(get_user_id)
+        :param fuzzing_controller: _description_, defaults to Depends(get_fuzzing_controller)
+        :return: _description_
+    """
+    return fuzzing_controller.set_primitive(
+        "static", dict(static_primitive), user_id, group_name, case_name, block_name
+    )
 
 @router.post("/set/byte", name="设置 Byte ")
 async def set_byte(
@@ -171,21 +167,17 @@ async def set_byte(
 
 @router.post("/set/bytes", name="设置 Bytes 字段")
 async def set_bytes(
-    fuzz_test_case_group_name: str,
-    fuzz_test_case_name: str,
-    bytes_info: Bytes,
+    bytes_data: Annotated[Bytes, Body(embed=True)], 
+    group_name: str,
+    case_name: str,
     block_name: str | None = None,
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
+    user_id: int = Depends(get_user_id),
+    fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller)
 ):
     """
     可表示任意长度的二进制字节串模糊测试原语。
     """
-    user_id = UserController(db).get_user_id(token)
-    fuzz_manager = FuzzingController(db)
-    return fuzz_manager.set_bytes(
-        user_id, fuzz_test_case_group_name, fuzz_test_case_name, bytes_info, block_name
-    )
+    return fuzzing_controller.set_primitive("bytes", dict(bytes_data), user_id, group_name, case_name, block_name)
 
 
 @router.post("/set/word", name="设置 Word 字段")
@@ -204,18 +196,47 @@ async def set_qword():
 
 
 @router.post("/set/simple", name="设置 simple 字段")
-async def set_simple():
-    pass
-
+async def set_simple(
+    simple_data: Simple,
+    g_name,
+    c_name,
+    block_name,
+    user_id,
+    fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller)
+):
+    return fuzzing_controller.set_primitive(
+        "delim", 
+        dict(simple_data),
+        user_id,
+        g_name,
+        c_name,
+        block_name
+    )
 
 @router.post("/set/delim", name="设置 delim 字段")
-async def set_delim():
-    pass
+async def set_delim(
+    delim_data: Delim,
+    group_name: str,
+    case_name: str,
+    block_name: str | None = None,
+    user_id: int = Depends(get_user_id),
+    fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller)
+):
+    return fuzzing_controller.set_primitive(
+        "delim", dict(delim_data), user_id, group_name, case_name, block_name
+    )
 
 
 @router.post("/set/group", name="设置 Group 字段")
-async def set_group():
-    pass
+async def set_group(
+    group_data: Annotated[Group, Body(embed=True)], 
+    group_name: str,
+    case_name: str,
+    block_name: str | None = None,
+    user_id: int = Depends(get_user_id),
+    fuzzing_controller: FuzzingController = Depends(get_fuzzing_controller)
+):
+    return fuzzing_controller.set_primitive("group", dict(group_data), user_id, group_name, case_name, block_name)
 
 
 @router.post("/set/randomData", name="设置 Random Data 字段")
