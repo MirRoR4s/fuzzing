@@ -52,9 +52,9 @@ class UserToken(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {"message": "登录成功",
-                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJKaG9uIERvZSIsImV4cCI6IjExIiwiaWF0IjoxNTE2MjM5MDIyfQ.mc0XDHX04cpCoEqiXx5ARDudga4ca6IN7IfycCdskBA",
-                 "token_type": "Bearer"
-                 }
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJKaG9uIERvZSIsImV4cCI6IjExIiwiaWF0IjoxNTE2MjM5MDIyfQ.mc0XDHX04cpCoEqiXx5ARDudga4ca6IN7IfycCdskBA",
+                "token_type": "Bearer"
+                }
             ]
         }
     }
